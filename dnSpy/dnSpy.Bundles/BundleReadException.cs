@@ -28,13 +28,29 @@ namespace dnSpy.Bundles {
 			Offset = offset;
 		}
 
+		public BundleReadException(BundleReadErrorCode code, string message, int entryIndex, long? offset = null)
+			: base(message) {
+			Code = code;
+			EntryIndex = entryIndex;
+			Offset = offset;
+		}
+
 		public BundleReadException(BundleReadErrorCode code, string message, long? offset, Exception innerException)
 			: base(message, innerException) {
 			Code = code;
 			Offset = offset;
 		}
 
+		public BundleReadException(BundleReadErrorCode code, string message, int entryIndex,
+			long? offset, Exception innerException)
+			: base(message, innerException) {
+			Code = code;
+			EntryIndex = entryIndex;
+			Offset = offset;
+		}
+
 		public BundleReadErrorCode Code { get; }
+		public int? EntryIndex { get; }
 		public long? Offset { get; }
 	}
 }

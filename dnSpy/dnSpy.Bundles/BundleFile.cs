@@ -19,6 +19,9 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.IO.MemoryMappedFiles;
+using System.Threading;
 
 namespace dnSpy.Bundles {
 	/// <summary>
@@ -28,6 +31,22 @@ namespace dnSpy.Bundles {
 		/// <summary>Creates bundle metadata from validated fields.</summary>
 		public BundleFile(string filename, long fileLength, long markerOffset, long headerOffset,
 			BundleManifest manifest, IReadOnlyList<BundleEntry> entries) {
+			Initialize(filename, fileLength, markerOffset, headerOffset, manifest, entries,
+				headerEndOffset: 0, mapping: null);
+		}
+
+		internal BundleFile(string filename, long fileLength, long markerOffset, long headerOffset,
+			BundleManifest manifest, IReadOnlyList<BundleEntry> entries, long headerEndOffset,
+			MemoryMappedFile mapping) {
+			if (mapping is null)
+				throw new ArgumentNullException(nameof(mapping));
+			Initialize(filename, fileLength, markerOffset, headerOffset, manifest, entries,
+				headerEndOffset, mapping);
+		}
+
+		void Initialize(string filename, long fileLength, long markerOffset, long headerOffset,
+			BundleManifest manifest, IReadOnlyList<BundleEntry> entries, long headerEndOffset,
+			MemoryMappedFile? mapping) {
 			if (filename is null)
 				throw new ArgumentNullException(nameof(filename));
 			if (fileLength < 0)
@@ -40,30 +59,72 @@ namespace dnSpy.Bundles {
 				throw new ArgumentNullException(nameof(manifest));
 			if (entries is null)
 				throw new ArgumentNullException(nameof(entries));
+			if (mapping is not null && (headerEndOffset < headerOffset || headerEndOffset > fileLength))
+				throw new ArgumentOutOfRangeException(nameof(headerEndOffset));
 			Filename = filename;
 			FileLength = fileLength;
 			MarkerOffset = markerOffset;
 			HeaderOffset = headerOffset;
 			Manifest = manifest;
-			Entries = new List<BundleEntry>(entries).AsReadOnly();
+			var copiedEntries = new List<BundleEntry>(entries.Count);
+			foreach (BundleEntry entry in entries) {
+				if (entry is null)
+					throw new ArgumentException("The entry list contains a null entry.", nameof(entries));
+				entry.Owner = this;
+				copiedEntries.Add(entry);
+			}
+			Entries = copiedEntries.AsReadOnly();
+			HeaderEndOffset = headerEndOffset;
+			mappingFile = mapping;
 		}
 
 		/// <summary>Source filename.</summary>
-		public string Filename { get; }
+		public string Filename { get; private set; } = null!;
 		/// <summary>Length of the source file.</summary>
-		public long FileLength { get; }
+		public long FileLength { get; private set; }
 		/// <summary>Offset of the official bundle marker.</summary>
-		public long MarkerOffset { get; }
+		public long MarkerOffset { get; private set; }
 		/// <summary>Offset of the manifest header.</summary>
-		public long HeaderOffset { get; }
+		public long HeaderOffset { get; private set; }
 		/// <summary>Manifest metadata.</summary>
-		public BundleManifest Manifest { get; }
+		public BundleManifest Manifest { get; private set; } = null!;
 		/// <summary>Entries in manifest order.</summary>
-		public IReadOnlyList<BundleEntry> Entries { get; }
+		public IReadOnlyList<BundleEntry> Entries { get; private set; } = null!;
+		/// <summary>Exclusive end offset of the serialized header and entry records.</summary>
+		public long HeaderEndOffset { get; private set; }
+
+		MemoryMappedFile? mappingFile;
+		int disposed;
+
+		internal Stream OpenLogicalRead(BundleEntry entry) {
+			if (entry is null)
+				throw new ArgumentNullException(nameof(entry));
+			if (!ReferenceEquals(entry.Owner, this))
+				throw new ArgumentException("The entry does not belong to this bundle.", nameof(entry));
+			EnsureNotDisposed();
+			if (entry.IsCompressed)
+				throw new NotSupportedException("Compressed bundle entries are not supported by this reader yet.");
+			if (mappingFile is null)
+				throw new InvalidOperationException("The bundle has no source mapping.");
+			if (entry.Size == 0)
+				return new BoundedReadStream(this,
+					new MemoryStream(Array.Empty<byte>(), writable: false), 0);
+			Stream view = mappingFile.CreateViewStream(entry.Offset, entry.Size,
+				MemoryMappedFileAccess.Read);
+			return new BoundedReadStream(this, view, entry.Size);
+		}
+
+		internal void EnsureNotDisposed() {
+			if (Volatile.Read(ref disposed) != 0)
+				throw new ObjectDisposedException(nameof(BundleFile));
+		}
+
+		internal bool IsDisposed => Volatile.Read(ref disposed) != 0;
 
 		/// <summary>Releases resources held by a future entry reader.</summary>
 		public void Dispose() {
-			// The BND-001 shell owns no file handles yet.
+			if (Interlocked.Exchange(ref disposed, 1) == 0)
+				mappingFile?.Dispose();
 		}
 	}
 }

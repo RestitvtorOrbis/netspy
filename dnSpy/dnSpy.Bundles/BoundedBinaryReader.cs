@@ -43,6 +43,8 @@ namespace dnSpy.Bundles {
 
 		public long Position => stream.Position;
 
+		public byte ReadByteValue() => ReadByte();
+
 		public uint ReadUInt32() {
 			byte[] bytes = ReadBytes(sizeof(uint));
 			return (uint)(bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24));

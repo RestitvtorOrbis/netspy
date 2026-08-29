@@ -64,12 +64,26 @@ namespace dnSpy.Bundles {
 		/// <summary>Whether this entry uses compressed logical content.</summary>
 		public bool IsCompressed => CompressedSize != 0;
 
+		BundleFile? owner;
+
+		internal BundleFile? Owner {
+			get => owner;
+			set {
+				if (owner is not null && !ReferenceEquals(owner, value))
+					throw new InvalidOperationException("A bundle entry already belongs to another bundle.");
+				owner = value;
+			}
+		}
+
 		/// <summary>
 		/// Opens a bounded logical content stream.
 		/// </summary>
 		/// <remarks>Entry streams are implemented by the parser ticket.</remarks>
-		public Stream OpenLogicalRead() =>
-			throw new NotSupportedException("Bundle entry reading is not implemented yet.");
+		public Stream OpenLogicalRead() {
+			if (owner is null)
+				throw new InvalidOperationException("The entry is not attached to an opened bundle.");
+			return owner.OpenLogicalRead(this);
+		}
 
 		/// <summary>
 		/// Reads logical content after checking the caller-provided bound.
