@@ -1,0 +1,22 @@
+<Project>
+  <!--
+    The current SDK deliberately rejects IncludeSymbolsInSingleFile for .NET 5+
+    and higher. HostModel can still produce this useful parser fixture, so
+    suppress only that SDK validation diagnostic during PrepareForPublish and
+    restore the requested value for file selection and GenerateBundle
+    immediately afterwards. Compression remains self-contained-only, as the
+    SDK requires.
+  -->
+  <Target Name="SingleFileFixtureSuppressPrepareValidation" BeforeTargets="PrepareForPublish">
+    <PropertyGroup Condition="'$(SingleFileFixtureIncludeSymbols)' == 'true'">
+      <IncludeSymbolsInSingleFile>false</IncludeSymbolsInSingleFile>
+    </PropertyGroup>
+  </Target>
+
+  <Target Name="SingleFileFixtureRestoreRequestedOptions" AfterTargets="PrepareForPublish"
+          BeforeTargets="ComputeResolvedFilesToPublishList">
+    <PropertyGroup Condition="'$(SingleFileFixtureIncludeSymbols)' == 'true'">
+      <IncludeSymbolsInSingleFile>true</IncludeSymbolsInSingleFile>
+    </PropertyGroup>
+  </Target>
+</Project>

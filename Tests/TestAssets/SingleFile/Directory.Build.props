@@ -1,0 +1,9 @@
+<Project>
+  <!-- The generator supplies a different root for every variant. Keeping both
+       build and intermediate output below that root makes repeated fixture
+       generation independent and leaves the source tree untouched. -->
+  <PropertyGroup Condition="'$(SingleFileFixtureRoot)' != ''">
+    <BaseOutputPath>$(SingleFileFixtureRoot)/build/$(MSBuildProjectName)/</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(SingleFileFixtureRoot)/obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>

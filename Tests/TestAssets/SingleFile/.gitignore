@@ -1,0 +1,5 @@
+# Published single-file executables and intermediate fixture output are local
+# test artifacts. The source projects and generation metadata remain tracked.
+Net10/artifacts/
+Net10/obj/
+Net10/bin/
