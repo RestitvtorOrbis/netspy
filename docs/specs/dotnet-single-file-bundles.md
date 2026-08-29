@@ -913,7 +913,7 @@ The arrows are mandatory execution order, not merely opportunities inferred from
 | BND-001 | PR-02 | Completed | `feat(BND-001): scaffold bundle core` | Architecture and managed-DLL regression tests pass; net10/net48 core builds pass; full Windows `build.ps1` blocked locally because `pwsh` is unavailable |
 | BND-002 | PR-02 | Completed | `feat(BND-002): parse bundle manifest headers` | 25 header/adversarial tests and managed-DLL regression pass; full 27-test suite and net10/net48 core builds pass; Windows `build.ps1` blocked locally because `pwsh` is unavailable |
 | BND-003 | PR-02 | Completed | `feat(BND-003): parse and bound bundle entries` | 20 entry-validation and 5 uncompressed-stream tests pass; full 52-test suite and net10/net48 builds pass; Windows `build.ps1` blocked locally because `pwsh` is unavailable |
-| BND-004 | PR-02 | Planned | — | — |
+| BND-004 | PR-02 | Completed | `feat(BND-004): read compressed bundle entries` | 17 compressed and 6 uncompressed-stream tests pass; full 70-test suite and net10/net48 builds pass; Windows `build.ps1` blocked locally because `pwsh` is unavailable |
 | BND-005 | PR-02 | Planned | — | — |
 | BND-006 | PR-02 | Planned | — | — |
 | BND-007 | PR-03 | Planned | — | — |

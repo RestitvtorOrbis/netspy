@@ -37,16 +37,16 @@ namespace dnSpy.Bundles {
 
 		internal BundleFile(string filename, long fileLength, long markerOffset, long headerOffset,
 			BundleManifest manifest, IReadOnlyList<BundleEntry> entries, long headerEndOffset,
-			MemoryMappedFile mapping) {
+			MemoryMappedFile mapping, long maximumEntrySize = BundleReaderOptions.DefaultMaximumEntrySize) {
 			if (mapping is null)
 				throw new ArgumentNullException(nameof(mapping));
 			Initialize(filename, fileLength, markerOffset, headerOffset, manifest, entries,
-				headerEndOffset, mapping);
+				headerEndOffset, mapping, maximumEntrySize);
 		}
 
 		void Initialize(string filename, long fileLength, long markerOffset, long headerOffset,
 			BundleManifest manifest, IReadOnlyList<BundleEntry> entries, long headerEndOffset,
-			MemoryMappedFile? mapping) {
+			MemoryMappedFile? mapping, long maximumEntrySize = BundleReaderOptions.DefaultMaximumEntrySize) {
 			if (filename is null)
 				throw new ArgumentNullException(nameof(filename));
 			if (fileLength < 0)
@@ -61,6 +61,8 @@ namespace dnSpy.Bundles {
 				throw new ArgumentNullException(nameof(entries));
 			if (mapping is not null && (headerEndOffset < headerOffset || headerEndOffset > fileLength))
 				throw new ArgumentOutOfRangeException(nameof(headerEndOffset));
+			if (maximumEntrySize <= 0)
+				throw new ArgumentOutOfRangeException(nameof(maximumEntrySize));
 			Filename = filename;
 			FileLength = fileLength;
 			MarkerOffset = markerOffset;
@@ -75,6 +77,7 @@ namespace dnSpy.Bundles {
 			}
 			Entries = copiedEntries.AsReadOnly();
 			HeaderEndOffset = headerEndOffset;
+			MaximumEntrySize = maximumEntrySize;
 			mappingFile = mapping;
 		}
 
@@ -92,6 +95,7 @@ namespace dnSpy.Bundles {
 		public IReadOnlyList<BundleEntry> Entries { get; private set; } = null!;
 		/// <summary>Exclusive end offset of the serialized header and entry records.</summary>
 		public long HeaderEndOffset { get; private set; }
+		internal long MaximumEntrySize { get; private set; }
 
 		MemoryMappedFile? mappingFile;
 		int disposed;
@@ -102,16 +106,60 @@ namespace dnSpy.Bundles {
 			if (!ReferenceEquals(entry.Owner, this))
 				throw new ArgumentException("The entry does not belong to this bundle.", nameof(entry));
 			EnsureNotDisposed();
-			if (entry.IsCompressed)
-				throw new NotSupportedException("Compressed bundle entries are not supported by this reader yet.");
+			if (entry.Size > MaximumEntrySize)
+				throw new InvalidDataException("The entry exceeds the bundle read limit.");
 			if (mappingFile is null)
 				throw new InvalidOperationException("The bundle has no source mapping.");
 			if (entry.Size == 0)
 				return new BoundedReadStream(this,
 					new MemoryStream(Array.Empty<byte>(), writable: false), 0);
-			Stream view = mappingFile.CreateViewStream(entry.Offset, entry.Size,
+			long physicalSize = entry.IsCompressed ? entry.CompressedSize : entry.Size;
+			Stream view = mappingFile.CreateViewStream(entry.Offset, physicalSize,
 				MemoryMappedFileAccess.Read);
-			return new BoundedReadStream(this, view, entry.Size);
+			var bounded = new BoundedReadStream(this, view, physicalSize);
+			if (!entry.IsCompressed)
+				return bounded;
+			var deflate = new System.IO.Compression.DeflateStream(bounded,
+				System.IO.Compression.CompressionMode.Decompress, leaveOpen: false);
+			return new ExactLengthReadStream(this, deflate, entry.Size,
+				() => ValidateCompressedEntry(entry));
+		}
+
+		void ValidateCompressedEntry(BundleEntry entry) {
+			if (mappingFile is null)
+				throw new InvalidOperationException("The bundle has no source mapping.");
+			using Stream view = mappingFile.CreateViewStream(entry.Offset, entry.CompressedSize,
+				MemoryMappedFileAccess.Read);
+			using var bounded = new BoundedReadStream(this, view, entry.CompressedSize);
+			DeflateEndValidator.Validate(bounded);
+		}
+
+		/// <summary>Materializes one entry after checking caller and bundle limits.</summary>
+		public byte[] ReadAllBytes(BundleEntry entry, long maximumBytes) {
+			if (entry is null)
+				throw new ArgumentNullException(nameof(entry));
+			if (maximumBytes < 0)
+				throw new ArgumentOutOfRangeException(nameof(maximumBytes));
+			if (!ReferenceEquals(entry.Owner, this))
+				throw new ArgumentException("The entry does not belong to this bundle.", nameof(entry));
+			EnsureNotDisposed();
+			if (entry.Size > MaximumEntrySize)
+				throw new InvalidOperationException("The entry exceeds the bundle read limit.");
+			if (entry.Size > maximumBytes)
+				throw new InvalidOperationException("The entry exceeds the requested read limit.");
+			if (entry.Size > int.MaxValue)
+				throw new InvalidOperationException("The entry is too large to materialize in memory.");
+
+			byte[] result = new byte[(int)entry.Size];
+			using Stream stream = OpenLogicalRead(entry);
+			int position = 0;
+			while (position < result.Length) {
+				int read = stream.Read(result, position, result.Length - position);
+				if (read <= 0)
+					throw new InvalidDataException("The bundle entry ended before its declared logical length.");
+				position += read;
+			}
+			return result;
 		}
 
 		internal void EnsureNotDisposed() {

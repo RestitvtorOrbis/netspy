@@ -78,7 +78,7 @@ namespace dnSpy.Bundles {
 		/// <summary>
 		/// Opens a bounded logical content stream.
 		/// </summary>
-		/// <remarks>Entry streams are implemented by the parser ticket.</remarks>
+		/// <remarks>The returned stream is bounded to this entry's logical content.</remarks>
 		public Stream OpenLogicalRead() {
 			if (owner is null)
 				throw new InvalidOperationException("The entry is not attached to an opened bundle.");
@@ -88,13 +88,15 @@ namespace dnSpy.Bundles {
 		/// <summary>
 		/// Reads logical content after checking the caller-provided bound.
 		/// </summary>
-		/// <remarks>Entry materialization is implemented by the parser ticket.</remarks>
+		/// <remarks>The caller-provided bound is checked before any byte array is allocated.</remarks>
 		public byte[] ReadAllBytes(long maximumBytes) {
 			if (maximumBytes < 0)
 				throw new ArgumentOutOfRangeException(nameof(maximumBytes));
 			if (Size > maximumBytes)
 				throw new InvalidOperationException("The entry exceeds the requested read limit.");
-			throw new NotSupportedException("Bundle entry reading is not implemented yet.");
+			if (owner is null)
+				throw new InvalidOperationException("The entry is not attached to an opened bundle.");
+			return owner.ReadAllBytes(this, maximumBytes);
 		}
 	}
 }

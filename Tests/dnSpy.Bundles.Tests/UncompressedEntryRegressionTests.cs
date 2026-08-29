@@ -39,6 +39,16 @@ namespace dnSpy.Bundles.Tests {
 		}
 
 		[Fact]
+		public void UncompressedReadAllBytesReturnsOnlyTheEntry() {
+			using (SyntheticFactory factory = CreateBundle()) {
+				BundleFile bundle = factory.Result.Bundle!;
+				BundleEntry entry = bundle.Entries[0];
+				Assert.Equal(new byte[] { 1, 2, 3 }, entry.ReadAllBytes(3));
+				Assert.Equal(new byte[] { 1, 2, 3 }, bundle.ReadAllBytes(entry, 3));
+			}
+		}
+
+		[Fact]
 		public void BundleAndEntryDisposalIsDeterministicAndIdempotent() {
 			using (SyntheticFactory factory = CreateBundle()) {
 				BundleFile bundle = factory.Result.Bundle!;
@@ -106,12 +116,13 @@ namespace dnSpy.Bundles.Tests {
 		}
 
 		[Fact]
-		public void CompressedEntryIsMetadataOnlyUntilBnd004() {
+		public void MalformedCompressedEntryFailsWhenRead() {
 			var synthetic = SyntheticFactory.CreateV6Compressed();
 			try {
 				Assert.Equal(BundleOpenStatus.Success, synthetic.Result.Status);
 				Assert.True(synthetic.Result.Bundle!.Entries[0].IsCompressed);
-				Assert.Throws<NotSupportedException>(() => synthetic.Result.Bundle.Entries[0].OpenLogicalRead());
+				using Stream stream = synthetic.Result.Bundle.Entries[0].OpenLogicalRead();
+				Assert.Throws<InvalidDataException>(() => stream.CopyTo(Stream.Null));
 			}
 			finally {
 				synthetic.Dispose();

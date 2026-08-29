@@ -72,7 +72,8 @@ namespace dnSpy.Bundles {
 					MemoryMappedFileAccess.Read);
 				var bundle = new BundleFile(filename, fileLength,
 					scan.FirstValidMatch.MarkerOffset, scan.FirstValidMatch.HeaderOffset,
-					manifest, header.Entries, header.ManifestEndOffset, mapping);
+					manifest, header.Entries, header.ManifestEndOffset, mapping,
+					options.MaximumEntrySize);
 				mapping = null;
 				return new BundleOpenResult(BundleOpenStatus.Success, bundle);
 			}

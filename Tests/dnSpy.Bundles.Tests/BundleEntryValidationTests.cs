@@ -179,6 +179,13 @@ namespace dnSpy.Bundles.Tests {
 				new FuzzSeed("negative-offset", () => SyntheticBundle.Create(1, new[] {
 					new SyntheticBundleEntry(BundleFileType.Assembly, 1, "negative", new byte[] { 1 }, offset: -1),
 				}), BundleReadErrorCode.InvalidEntryRange),
+				new FuzzSeed("negative-size", () => SyntheticBundle.Create(1, new[] {
+					new SyntheticBundleEntry(BundleFileType.Assembly, 1, "negative-size", new byte[] { 1 }, declaredSize: -1),
+				}), BundleReadErrorCode.InvalidEntryRange),
+				new FuzzSeed("negative-compressed-size", () => SyntheticBundle.Create(6, new[] {
+					new SyntheticBundleEntry(BundleFileType.Assembly, 1, "negative-compressed-size", new byte[] { 1 },
+						declaredSize: 2, compressedSize: -1),
+				}), BundleReadErrorCode.InvalidEntryRange),
 				new FuzzSeed("offset-overflow", () => SyntheticBundle.Create(1, new[] {
 					new SyntheticBundleEntry(BundleFileType.Assembly, 1, "overflow", new byte[] { 1 }, offset: long.MaxValue),
 				}), BundleReadErrorCode.InvalidEntryRange),
