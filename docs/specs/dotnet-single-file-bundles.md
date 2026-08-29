@@ -910,7 +910,7 @@ The arrows are mandatory execution order, not merely opportunities inferred from
 | Ticket | Phase | Status | Commit | Verification evidence |
 |---|---|---|---|---|
 | PR-01 | PR-01 | Completed | Documentation commit | Approved design/spec documentation; `git diff --check` |
-| BND-001 | PR-02 | Planned | — | — |
+| BND-001 | PR-02 | Completed | `feat(BND-001): scaffold bundle core` | Architecture and managed-DLL regression tests pass; net10/net48 core builds pass; full Windows `build.ps1` blocked locally because `pwsh` is unavailable |
 | BND-002 | PR-02 | Planned | — | — |
 | BND-003 | PR-02 | Planned | — | — |
 | BND-004 | PR-02 | Planned | — | — |
