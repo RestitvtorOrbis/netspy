@@ -18,11 +18,10 @@
 */
 
 using System;
+using System.IO;
 
 namespace dnSpy.Bundles {
-	/// <summary>
-	/// Entry point for opening official .NET single-file bundles.
-	/// </summary>
+	/// <summary>Entry point for opening official .NET single-file bundles.</summary>
 	public sealed class BundleReader {
 		readonly BundleReaderOptions options;
 
@@ -32,15 +31,52 @@ namespace dnSpy.Bundles {
 		/// <summary>
 		/// Attempts to open a file as an official bundle.
 		/// </summary>
-		/// <remarks>
-		/// Detection and parsing are introduced by subsequent parser tickets. BND-001
-		/// intentionally preserves normal loading by returning <see cref="BundleOpenStatus.NotBundle"/>.
-		/// </remarks>
 		public BundleOpenResult Open(string filename) {
 			if (filename is null)
 				throw new ArgumentNullException(nameof(filename));
-			_ = options;
-			return new BundleOpenResult(BundleOpenStatus.NotBundle);
+
+			using var stream = File.OpenRead(filename);
+			long fileLength = stream.Length;
+			BundleSignatureScanResult scan = BundleSignatureScanner.Scan(
+				stream, fileLength, options.MaximumSignatureSearchBytes);
+			if (!scan.SignatureFound)
+				return new BundleOpenResult(BundleOpenStatus.NotBundle);
+			if (scan.MultipleValidMatches) {
+				return Failure(BundleOpenStatus.InvalidBundle, new BundleReadError(
+					BundleReadErrorCode.AmbiguousBundle,
+					"More than one valid bundle marker was found."));
+			}
+			if (scan.FirstValidMatch is null) {
+				return Failure(BundleOpenStatus.InvalidBundle,
+					scan.FirstInvalidPointer ?? new BundleReadError(
+						BundleReadErrorCode.InvalidHeaderOffset,
+						"The bundle header pointer is invalid."));
+			}
+
+			BundleManifestHeader header;
+			try {
+				header = BundleManifestReader.Read(stream, scan.FirstValidMatch.HeaderOffset,
+					fileLength, options);
+			}
+			catch (BundleReadException ex) {
+				BundleOpenStatus status = ex.Code == BundleReadErrorCode.UnsupportedVersion
+					? BundleOpenStatus.UnsupportedVersion
+					: BundleOpenStatus.InvalidBundle;
+				return Failure(status, new BundleReadError(ex.Code, ex.Message, offset: ex.Offset));
+			}
+
+			// Entry records are deliberately left for BND-003. Keeping the header result
+			// useful at this stage lets marker/header validation land independently without
+			// introducing entry streams or allocations ahead of that ticket.
+			var manifest = new BundleManifest(header.MajorVersion, header.MinorVersion,
+				header.BundleId, header.Flags, header.DepsJson, header.RuntimeConfigJson);
+			var bundle = new BundleFile(filename, fileLength,
+				scan.FirstValidMatch.MarkerOffset, scan.FirstValidMatch.HeaderOffset,
+				manifest, Array.Empty<BundleEntry>());
+			return new BundleOpenResult(BundleOpenStatus.Success, bundle);
 		}
+
+		static BundleOpenResult Failure(BundleOpenStatus status, BundleReadError error) =>
+			new BundleOpenResult(status, error: error);
 	}
 }
