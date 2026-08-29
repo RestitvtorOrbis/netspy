@@ -1,10 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <!-- Keep the shared source project consumable by every historical SDK. -->
+    <TargetFramework>netstandard2.0</TargetFramework>
     <AssemblyName>SingleFile.Dependency</AssemblyName>
     <RootNamespace>SingleFile.Dependency</RootNamespace>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
     <DebugType>portable</DebugType>
     <DebugSymbols>true</DebugSymbols>
     <Deterministic>true</Deterministic>

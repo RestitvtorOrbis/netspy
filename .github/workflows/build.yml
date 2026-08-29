@@ -64,3 +64,116 @@ jobs:
           path: C:\builtfiles\dnSpy-${{matrix.platform}}
           if-no-files-found: error
           compression-level: 9
+
+  historical-bundle-fixtures:
+    name: Historical bundle fixtures (${{ matrix.generation }})
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - generation: NetCoreApp31
+            sdk: 3.1.426
+          - generation: Net5
+            sdk: 5.0.408
+          - generation: Net6
+            sdk: 6.0.428
+          - generation: Net8
+            sdk: 8.0.419
+          - generation: Net10
+            sdk: 10.0.111
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          submodules: false
+
+      - name: Install pinned .NET SDK (${{ matrix.sdk }})
+        uses: actions/setup-dotnet@v6.0.0
+        with:
+          dotnet-version: ${{ matrix.sdk }}
+          dotnet-quality: ga
+
+      - name: Assert pinned SDK and generate required artifacts
+        run: |
+          $actual = (dotnet --version).Trim()
+          if ($actual -ne '${{ matrix.sdk }}') {
+            throw "Expected SDK ${{ matrix.sdk }}, but dotnet --version returned $actual"
+          }
+          & .\Tests\TestAssets\SingleFile\Generate-HistoricalFixtures.ps1 `
+            -Generation '${{ matrix.generation }}'
+          if ($LASTEXITCODE -ne 0) {
+            throw "Historical fixture generation failed for ${{ matrix.generation }}"
+          }
+          $root = Join-Path $PWD 'Tests/TestAssets/SingleFile/artifacts/historical/${{ matrix.generation }}'
+          $sidecars = @(Get-ChildItem -LiteralPath $root -Recurse -File -Filter fixture.json)
+          if ($sidecars.Count -eq 0) {
+            throw "No fixture.json artifact was generated for ${{ matrix.generation }}"
+          }
+          foreach ($sidecar in $sidecars) {
+            foreach ($name in @('inventory.json', 'hashes.json')) {
+              if (-not (Test-Path -LiteralPath (Join-Path $sidecar.DirectoryName $name))) {
+                throw "Required $name sidecar is missing beside $($sidecar.FullName)"
+              }
+            }
+          }
+
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: dnSpy-single-file-historical-${{ matrix.generation }}
+          # Upload from the common root so merge-multiple preserves the
+          # generation directory when the five matrix artifacts are combined.
+          path: Tests/TestAssets/SingleFile/artifacts/historical
+          if-no-files-found: error
+          compression-level: 9
+
+  historical-bundle-tests:
+    name: Historical bundle parser tests
+    needs: historical-bundle-fixtures
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          submodules: false
+
+      - uses: actions/setup-dotnet@v6.0.0
+        with:
+          dotnet-version: 10.0.111
+          dotnet-quality: ga
+
+      - uses: actions/download-artifact@v7.0.1
+        with:
+          pattern: dnSpy-single-file-historical-*
+          path: Tests/TestAssets/SingleFile/artifacts/historical
+          merge-multiple: true
+
+      - name: Require every downloaded historical fixture
+        run: |
+          $root = Join-Path $PWD 'Tests/TestAssets/SingleFile/artifacts/historical'
+          $required = @('NetCoreApp31', 'Net5', 'Net6', 'Net8', 'Net10')
+          foreach ($generation in $required) {
+            $generationRoot = Join-Path $root $generation
+            if (-not (Test-Path -LiteralPath $generationRoot -PathType Container)) {
+              throw "Required historical generation artifact is missing: $generation"
+            }
+            if (@(Get-ChildItem -LiteralPath $generationRoot -Recurse -File -Filter fixture.json).Count -eq 0) {
+              throw "Required historical fixture output is missing: $generation"
+            }
+          }
+
+      - name: Generate modern regression fixtures
+        run: .\Tests\TestAssets\SingleFile\Generate-ModernFixtures.ps1
+
+      - name: Run modern fixture regression
+        run: dotnet test Tests/dnSpy.Bundles.Tests/dnSpy.Bundles.Tests.csproj -c Release -f net10.0 --filter FullyQualifiedName~ModernPublishedBundleTests
+
+      - name: Run historical fixture matrix
+        run: |
+          $env:DNSPY_BUNDLE_FIXTURES = (Resolve-Path 'Tests/TestAssets/SingleFile/artifacts/historical').Path
+          dotnet test Tests/dnSpy.Bundles.Tests/dnSpy.Bundles.Tests.csproj -c Release -f net10.0 --filter FullyQualifiedName~HistoricalPublishedBundleTests
