@@ -4,6 +4,7 @@
 using System;
 using System.IO;
 using dnlib.DotNet;
+using dnlib.DotNet.MD;
 using dnlib.PE;
 
 namespace dnSpy.Bundles.Extension {
@@ -87,6 +88,45 @@ namespace dnSpy.Bundles.Extension {
 			catch {
 				peImage.Dispose();
 				throw;
+			}
+		}
+
+		/// <summary>
+		/// Checks the bounded managed-entry image for the official ReadyToRun signature.
+		/// </summary>
+		/// <remarks>
+		/// A non-zero COR20 native-header directory is not sufficient: the first four bytes of
+		/// that directory must be the little-endian <c>RTR</c> signature. The module was loaded
+		/// from one bounded entry byte array, so this probe cannot cross into a sibling entry.
+		/// </remarks>
+		public static bool IsReadyToRun(ModuleDef module) {
+			if (module is null)
+				throw new ArgumentNullException(nameof(module));
+			if (module is not ModuleDefMD moduleMD)
+				return false;
+			try {
+				IPEImage peImage = moduleMD.Metadata.PEImage;
+				ImageDataDirectory nativeHeader = moduleMD.Metadata.ImageCor20Header.ManagedNativeHeader;
+				if (nativeHeader.VirtualAddress == 0 || nativeHeader.Size < sizeof(uint))
+					return false;
+
+				// Validate the complete declared range against the already bounded entry image before
+				// reading its signature. Do not let a valid four-byte prefix hide a directory that
+				// extends into a neighboring entry (or past the end of the selected entry).
+				dnlib.IO.FileOffset fileOffset = peImage.ToFileOffset((RVA)nativeHeader.VirtualAddress);
+				uint offset = (uint)fileOffset;
+				if (offset == 0 && nativeHeader.VirtualAddress != 0)
+					return false;
+				var imageReader = peImage.CreateReader();
+				ulong endOffset = checked((ulong)offset + nativeHeader.Size);
+				if (offset > imageReader.Length || endOffset > imageReader.Length)
+					return false;
+				var reader = peImage.CreateReader(fileOffset, nativeHeader.Size);
+				return reader.ReadUInt32() == 0x00525452;
+			}
+			catch (Exception ex) when (ex is BadImageFormatException || ex is IOException ||
+				ex is dnlib.IO.DataReaderException || ex is ArgumentException || ex is OverflowException) {
+				return false;
 			}
 		}
 	}

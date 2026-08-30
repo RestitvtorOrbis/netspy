@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Extensions\dnSpy.Bundles\dnSpy.Bundles.Extension.csproj" />
+    <ProjectReference Include="..\..\Extensions\dnSpy.Debugger\dnSpy.Debugger\dnSpy.Debugger.csproj" />
     <!-- BND-011 executes the existing decompiler and analyzer implementations against
          activated bundle modules instead of replacing either pipeline with test doubles. -->
     <ProjectReference Include="..\..\Extensions\ILSpy.Decompiler\dnSpy.Decompiler.ILSpy\dnSpy.Decompiler.ILSpy.csproj" />

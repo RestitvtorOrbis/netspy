@@ -63,10 +63,8 @@ namespace dnSpy.Debugger.DbgUI {
 		}
 
 		string GetCurrentFilename() {
-			var filename = documentTabService.DocumentTreeView.TreeView.SelectedItem.GetDocumentNode()?.Document.Filename ?? string.Empty;
-			if (File.Exists(filename))
-				return filename;
-			return string.Empty;
+			return DebugTargetCompatibility.GetPhysicalFilename(
+				documentTabService.DocumentTreeView.TreeView.SelectedItem);
 		}
 
 		public string? GetCurrentExecutableFilename() {
@@ -79,6 +77,11 @@ namespace dnSpy.Debugger.DbgUI {
 		public (StartDebuggingOptions options, StartDebuggingOptionsInfoFlags flags) GetStartDebuggingOptions(string? defaultBreakKind) {
 			var breakKind = defaultBreakKind ?? PredefinedBreakKinds.DontBreak;
 			var filename = GetCurrentFilename();
+			string? nativeAotMessage = DebugTargetCompatibility.GetNativeAotUnsupportedMessage(filename);
+			if (nativeAotMessage is not null) {
+				MsgBox.Instance.Show(nativeAotMessage, MsgBoxButton.OK);
+				return default;
+			}
 			var context = new StartDebuggingOptionsPageContext(filename);
 			var pages = GetStartDebuggingOptionsPages(context);
 			Debug.Assert(pages.Length != 0, "No debug engines!");

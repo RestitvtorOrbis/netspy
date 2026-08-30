@@ -142,13 +142,18 @@ namespace dnSpy.Bundles.Extension {
 
 		protected override void WriteCore(ITextColorWriter output, IDecompiler decompiler,
 			DocumentNodeWriteOptions options) {
+			BundleAssemblyDocumentAnnotation? annotation = Document.Annotation<BundleAssemblyDocumentAnnotation>();
 			if ((options & DocumentNodeWriteOptions.ToolTip) == 0) {
 				new NodeFormatter().Write(output, decompiler, Document.AssemblyDef!, false,
 					Context is not null && Context.ShowAssemblyVersion,
 					Context is not null && Context.ShowAssemblyPublicKeyToken);
+				if (annotation?.ModuleDocument.IsReadyToRun == true)
+					output.Write(BoxedTextColor.Comment, " [ReadyToRun]");
 			}
 			else {
 				output.Write(Document.AssemblyDef!);
+				if (annotation?.ModuleDocument.IsReadyToRun == true)
+					output.Write(BoxedTextColor.Comment, " [ReadyToRun]");
 				output.WriteLine();
 				output.WriteFilename(Document.Filename);
 			}

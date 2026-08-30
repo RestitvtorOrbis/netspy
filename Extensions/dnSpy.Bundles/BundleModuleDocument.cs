@@ -46,7 +46,7 @@ namespace dnSpy.Bundles.Extension {
 		public bool HasWorkspaceReplacement => false;
 
 		/// <inheritdoc/>
-		public bool IsReadyToRun => false;
+		public bool IsReadyToRun => BundleManagedEntryAdapter.IsReadyToRun(ModuleDef!);
 
 		/// <inheritdoc/>
 		public override DsDocumentInfo? SerializedDocument => serializedDocument;
