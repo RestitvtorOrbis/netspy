@@ -647,10 +647,17 @@ The net10 test runner consumes all artifact roots through `DNSPY_BUNDLE_FIXTURES
 
 ## 7. Licensing and provenance boundary
 
-- The dnSpy repository is GPLv3; new original dnSpy files use the repository's existing copyright/GPL header convention.
+- The dnSpy repository is GPLv3. Every new original C# source file for this project, including test and fixture-generator source, begins with exactly these two lines:
+
+  ```csharp
+  // Copyright (C) 2026 netSpy Single-File contributors
+  // SPDX-License-Identifier: GPL-3.0-or-later
+  ```
+
+  This project-specific header replaces the legacy multiline de4dot header for new project files and must remain the first content in the file.
 - Parser behavior is reimplemented from the documented format and official runtime behavior. Do not copy ILSpy's `SingleFileBundle.cs` merely for convenience.
 - If an ILSpy fragment is ever adapted, retain its MIT/.NET Foundation header and record exact source URL and commit. The existing ILSpy submodule is neither modified nor updated.
-- The vendored HostModel subset is copied only from `dotnet/runtime` tag `v10.0.11`, commit `79d0c463f1b55624c874a11585f7e47731e8d675`; retain every MIT header, upstream license, source revision, file list, and adaptation notes.
+- The vendored HostModel subset is copied only from `dotnet/runtime` tag `v10.0.11`, commit `79d0c463f1b55624c874a11585f7e47731e8d675`; retain every upstream MIT header, upstream license, source revision, file list, and adaptation notes. Vendored upstream HostModel files must not be relabeled with the project-specific header.
 - Do not paste code from web snippets or unlicensed third-party parsers.
 - A ticket that changes provenance or imports more upstream source must update the provenance README and `pre-spec.md` in the same commit.
 

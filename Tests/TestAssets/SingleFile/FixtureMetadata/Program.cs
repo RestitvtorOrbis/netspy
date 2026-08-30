@@ -1,3 +1,6 @@
+// Copyright (C) 2026 netSpy Single-File contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 using System.Security.Cryptography;
 using System.Text.Json;
 
