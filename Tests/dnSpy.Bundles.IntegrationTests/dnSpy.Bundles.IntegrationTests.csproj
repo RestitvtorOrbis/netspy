@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <IsTestProject>true</IsTestProject>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Extensions\dnSpy.Bundles\dnSpy.Bundles.Extension.csproj" />
+    <ProjectReference Include="..\..\dnSpy\dnSpy.Bundles\dnSpy.Bundles.csproj" />
+    <ProjectReference Include="..\..\dnSpy\dnSpy.Contracts.DnSpy\dnSpy.Contracts.DnSpy.csproj" />
+    <!-- Include the product assembly so the regression exercises its real
+         DsDocumentService and DefaultDsDocumentProvider composition. -->
+    <ProjectReference Include="..\..\dnSpy\dnSpy\dnSpy.csproj" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
+    <PackageReference Include="xunit.v3" Version="3.1.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+  </ItemGroup>
+
+</Project>

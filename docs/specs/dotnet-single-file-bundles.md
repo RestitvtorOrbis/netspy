@@ -923,7 +923,7 @@ The arrows are mandatory execution order, not merely opportunities inferred from
 | BND-004 | PR-02 | Completed | `feat(BND-004): read compressed bundle entries` | 17 compressed and 6 uncompressed-stream tests pass; full 70-test suite and net10/net48 builds pass; Windows `build.ps1` blocked locally because `pwsh` is unavailable |
 | BND-005 | PR-02 | Completed | `test(BND-005): validate modern published bundles` | Five SDK 10.0.111 fixtures generated; 3 real-bundle and 1 synthetic regression tests pass; full 74-test suite and net10/net48 builds pass; generated artifacts ignored; PowerShell/Windows full build unavailable locally |
 | BND-006 | PR-02 | Completed | `test(BND-006): add historical bundle matrix` | Windows CI requires pinned SDK 3.1/5/6/8/10 artifacts and exact inventory/compression assertions; locally 74 tests pass with 3 historical prerequisite skips and net10/net48 builds pass; historical PowerShell generation/full build unavailable here |
-| BND-007 | PR-03 | Planned | — | — |
+| BND-007 | PR-03 | Completed | `feat(BND-007): add bundle document provider` | Extension and Windows integration test assembly compile for net10.0-windows; 74 portable tests pass with 3 historical skips; Windows test execution is blocked locally by unavailable Microsoft.WindowsDesktop.App runtime |
 | BND-008 | PR-03 | Planned | — | — |
 | BND-009 | PR-03 | Planned | — | — |
 | BND-010 | PR-03 | Planned | — | — |

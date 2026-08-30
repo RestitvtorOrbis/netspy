@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+
+  <Import Project="..\..\DnSpyCommon.props" />
+
+  <PropertyGroup>
+    <Copyright>Copyright (C) 2026 netSpy Single-File contributors</Copyright>
+    <Version>$(DnSpyAssemblyVersion)</Version>
+    <InformationalVersion>$(DnSpyAssemblyInformationalVersion)</InformationalVersion>
+
+    <AssemblyName>dnSpy.Bundles.x</AssemblyName>
+    <SignAssembly>True</SignAssembly>
+    <AssemblyOriginatorKeyFile>..\..\dnSpy.snk</AssemblyOriginatorKeyFile>
+    <OutputPath>..\..\dnSpy\dnSpy\bin\$(Configuration)\</OutputPath>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\dnSpy\dnSpy.Bundles\dnSpy.Bundles.csproj" />
+    <ProjectReference Include="..\..\dnSpy\dnSpy.Contracts.DnSpy\dnSpy.Contracts.DnSpy.csproj" />
+  </ItemGroup>
+
+</Project>
