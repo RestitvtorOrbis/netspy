@@ -19,6 +19,7 @@
 
 using dnSpy.Contracts.Controls;
 using dnSpy.Contracts.MVVM;
+using System.Windows;
 
 namespace dnSpy.AsmEditor.SaveModule {
 	sealed partial class SaveModuleOptionsDlg : WindowBase {
@@ -28,6 +29,12 @@ namespace dnSpy.AsmEditor.SaveModule {
 				if (DataContext is SaveModuleOptionsVM data)
 					data.PickSaveFilename = new PickSaveFilename();
 			};
+		}
+
+		private new void okButton_Click(object? sender, RoutedEventArgs? e) {
+			if (DataContext is SaveModuleOptionsVM data && !data.PrepareStrongNameSave(this))
+				return;
+			ClickOK();
 		}
 	}
 }

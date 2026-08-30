@@ -177,7 +177,8 @@ namespace dnSpy.AsmEditor.SaveModule {
 
 		void Save(SaveModuleOptionsVM vm) {
 			fileProgress = new ModuleFileProgress();
-			ModuleSerializationService.WriteToFile(vm, vm.FileName, this, ModuleWriter_ProgressUpdated);
+			if (!ModuleSerializationService.WriteToFile(vm, vm.FileName, this, ModuleWriter_ProgressUpdated))
+				throw new TaskCanceledException();
 		}
 
 		void Save(SaveHexOptionsVM hex, ref byte[]? buffer) {

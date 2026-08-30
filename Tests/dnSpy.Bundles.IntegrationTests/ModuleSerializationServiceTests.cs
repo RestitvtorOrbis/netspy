@@ -68,19 +68,19 @@ namespace dnSpy.Bundles.IntegrationTests {
 
 		public object CreateOptions() => Activator.CreateInstance(SaveModuleOptionsType, document)!;
 
-		public static void WriteToFile(object options, string filename) {
-			Invoke("WriteToFile", options, filename, null);
+		public static bool WriteToFile(object options, string filename) {
+			return Invoke("WriteToFile", options, filename, null);
 		}
 
-		public static void WriteToStream(object options, Stream stream) {
-			Invoke("WriteToStream", options, stream, null);
+		public static bool WriteToStream(object options, Stream stream) {
+			return Invoke("WriteToStream", options, stream, null);
 		}
 
-		static void Invoke(string methodName, object options, object target, EventHandler? progressUpdated) {
+		static bool Invoke(string methodName, object options, object target, EventHandler? progressUpdated) {
 			MethodInfo method = SerializationServiceType.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
 				.Single(a => a.Name == methodName);
 			try {
-				method.Invoke(null, new object?[] { options, target, DummyLogger.NoThrowInstance, progressUpdated });
+				return (bool)method.Invoke(null, new object?[] { options, target, DummyLogger.NoThrowInstance, progressUpdated })!;
 			}
 			catch (TargetInvocationException ex) when (ex.InnerException is not null) {
 				throw ex.InnerException;

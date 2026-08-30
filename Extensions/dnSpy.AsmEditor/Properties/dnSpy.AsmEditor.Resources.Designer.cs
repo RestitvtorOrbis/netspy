@@ -5517,6 +5517,15 @@ namespace dnSpy.AsmEditor.Properties {
                 return ResourceManager.GetString("SaveModule_WritePdb", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to This assembly has a strong-name signature. Choose Yes to remove the signature for this output, No to re-sign it with a selected .snk file, or Cancel to abort saving..
+        /// </summary>
+        public static string StrongNameSave_Message {
+            get {
+                return ResourceManager.GetString("StrongNameSave_Message", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Save _Module....

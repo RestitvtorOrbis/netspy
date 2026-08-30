@@ -18,6 +18,7 @@
 */
 
 using System.Text;
+using System.Windows;
 using System.Windows.Input;
 using dnlib.DotNet;
 using dnlib.DotNet.MD;
@@ -34,6 +35,9 @@ namespace dnSpy.AsmEditor.SaveModule {
 		public ModuleDef Module { get; }
 		public override object UndoDocument => document;
 		readonly IDsDocument document;
+
+		internal StrongNameSaveDisposition StrongNameSaveDisposition { get; private set; } = StrongNameSaveDisposition.Cancel;
+		internal string? StrongNameKeyFileName { get; private set; }
 
 		public ICommand ReinitializeCommand => new RelayCommand(a => Reinitialize());
 		public bool CanSaveMixedModeModule => Module is ModuleDefMD;
@@ -214,6 +218,21 @@ namespace dnSpy.AsmEditor.SaveModule {
 			}
 		}
 
+		internal bool PrepareStrongNameSave(Window? ownerWindow) {
+			if (!StrongNameSaveGuard.IsRequired(Module))
+				return true;
+			if (!StrongNameSaveGuard.TryPrompt(Module, ownerWindow, out var disposition, out var keyFilename))
+				return false;
+			StrongNameSaveDisposition = disposition;
+			StrongNameKeyFileName = keyFilename;
+			return true;
+		}
+
+		internal void SetStrongNameSaveChoice(StrongNameSaveDisposition disposition, string? keyFilename) {
+			StrongNameSaveDisposition = disposition;
+			StrongNameKeyFileName = keyFilename;
+		}
+
 		ModuleWriterOptionsBase AddOtherOptions(ModuleWriterOptionsBase options) {
 			if (MetadataOptions.PreserveOtherMetadataStreams)
 				options.MetadataOptions.PreserveHeapOrder(Module, addCustomHeaps: true);
@@ -239,6 +258,7 @@ namespace dnSpy.AsmEditor.SaveModule {
 			other.FileName = FileName;
 			other.OriginalFileName = OriginalFileName;
 			other.UseMixedMode = UseMixedMode;
+			other.SetStrongNameSaveChoice(StrongNameSaveDisposition, StrongNameKeyFileName);
 			other.MetadataOptions.PreserveOtherMetadataStreams = MetadataOptions.PreserveOtherMetadataStreams;
 			other.InitializeFrom(CreateWriterOptions());
 			return other;

@@ -1841,6 +1841,9 @@ Most options will be re-initialized when this checkbox is clicked</value>
   <data name="SaveModule_WritePdb" xml:space="preserve">
     <value>Save _PDB File</value>
   </data>
+  <data name="StrongNameSave_Message" xml:space="preserve">
+    <value>This assembly has a strong-name signature. Choose Yes to remove the signature for this output, No to re-sign it with a selected .snk file, or Cancel to abort saving.</value>
+  </data>
   <data name="SaveResourceCommand" xml:space="preserve">
     <value>Save {0}</value>
   </data>

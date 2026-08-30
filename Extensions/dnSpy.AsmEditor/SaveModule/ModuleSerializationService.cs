@@ -27,26 +27,30 @@ namespace dnSpy.AsmEditor.SaveModule {
 	/// Serializes a module using the validated options from the Save Module dialog.
 	/// </summary>
 	internal static class ModuleSerializationService {
-		public static void WriteToFile(SaveModuleOptionsVM options, string filename, ILogger logger, EventHandler2<ModuleWriterProgressEventArgs>? progressUpdated) {
+		public static bool WriteToFile(SaveModuleOptionsVM options, string filename, ILogger logger, EventHandler2<ModuleWriterProgressEventArgs>? progressUpdated) {
 			if (options is null)
 				throw new ArgumentNullException(nameof(options));
 			if (filename is null)
 				throw new ArgumentNullException(nameof(filename));
-			Write(options, filename, null, logger, progressUpdated);
+			return Write(options, filename, null, logger, progressUpdated);
 		}
 
-		public static void WriteToStream(SaveModuleOptionsVM options, Stream stream, ILogger logger, EventHandler2<ModuleWriterProgressEventArgs>? progressUpdated) {
+		public static bool WriteToStream(SaveModuleOptionsVM options, Stream stream, ILogger logger, EventHandler2<ModuleWriterProgressEventArgs>? progressUpdated) {
 			if (options is null)
 				throw new ArgumentNullException(nameof(options));
 			if (stream is null)
 				throw new ArgumentNullException(nameof(stream));
 			if (!stream.CanWrite)
 				throw new ArgumentException("The stream must be writable", nameof(stream));
-			Write(options, null, stream, logger, progressUpdated);
+			return Write(options, null, stream, logger, progressUpdated);
 		}
 
-		static void Write(SaveModuleOptionsVM options, string? filename, Stream? stream, ILogger logger, EventHandler2<ModuleWriterProgressEventArgs>? progressUpdated) {
+		static bool Write(SaveModuleOptionsVM options, string? filename, Stream? stream, ILogger logger, EventHandler2<ModuleWriterProgressEventArgs>? progressUpdated) {
+			using var strongNameGuard = StrongNameSaveGuard.Create(options.Module, options.StrongNameSaveDisposition, options.StrongNameKeyFileName);
+			if (!strongNameGuard.CanWrite)
+				return false;
 			var writerOptions = options.CreateWriterOptions();
+			strongNameGuard.ConfigureWriterOptions(writerOptions);
 			if (progressUpdated is not null)
 				writerOptions.ProgressUpdated += progressUpdated;
 			writerOptions.Logger = logger;
@@ -68,6 +72,7 @@ namespace dnSpy.AsmEditor.SaveModule {
 				else
 					options.Module.Write(filename!, managedOptions);
 			}
+			return true;
 		}
 	}
 }
