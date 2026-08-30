@@ -67,7 +67,8 @@ namespace dnSpy.Bundles.Extension {
 				case BundleOpenStatus.Success:
 					if (result.Bundle is null)
 						return null;
-					return new BundleDsDocument(documentInfo, result.Bundle);
+					return new BundleDsDocument(documentInfo, result.Bundle,
+						assemblyResolver: documentService is null ? null : documentService.AssemblyResolver);
 				case BundleOpenStatus.InvalidBundle:
 				case BundleOpenStatus.UnsupportedVersion:
 					return new BundleErrorDocument(documentInfo, result.Status,

@@ -7,8 +7,8 @@ using dnSpy.Contracts.Documents;
 
 namespace dnSpy.Bundles.Extension {
 	/// <summary>
-	/// Metadata-only document for one bundle entry. Managed module creation is deliberately
-	/// deferred to BND-009, so this document never exposes a ModuleDef or PEImage.
+	/// Metadata-only document for one bundle entry. Managed materialization is explicit and cached,
+	/// so generic document traversal never exposes or loads a ModuleDef or PEImage accidentally.
 	/// </summary>
 	public sealed class BundleEntryDocument : DsDocument {
 		public BundleEntryDocument(BundleFolderDocument folderDocument, BundleEntry entry) {
@@ -27,13 +27,46 @@ namespace dnSpy.Bundles.Extension {
 		/// <summary>Validated parser metadata for the entry.</summary>
 		public BundleEntry Entry { get; }
 
-		/// <summary>Whether the entry is a managed assembly (still metadata-only in BND-008).</summary>
+		/// <summary>Whether the entry is a managed assembly.</summary>
 		public bool IsManaged => Entry.FileType == BundleFileType.Assembly;
 
-		/// <inheritdoc/>
+		/// <summary>
+		/// Gets the activated module, if this entry has already been selected. This property never
+		/// activates an entry and therefore remains null while the bundle tree is being rendered.
+		/// </summary>
+		public BundleModuleDocument? ManagedDocument {
+			get => BundleDocument.GetManagedDocument(this);
+		}
+
+		/// <summary>
+		/// Activates this managed entry and caches the resulting module document. Only this entry's
+		/// bounded logical stream is opened; sibling entries remain metadata-only.
+		/// </summary>
+		public BundleModuleDocument CreateManagedDocument() {
+			if (!IsManaged)
+				throw new InvalidOperationException("The bundle entry is not a managed assembly.");
+			return BundleDocument.CreateManagedDocument(this);
+		}
+
+		/// <summary>
+		/// Attempts to activate this entry and returns a safe exception for a visible error view.
+		/// </summary>
+		public bool TryCreateManagedDocument(out BundleModuleDocument? document, out Exception? error) {
+			return BundleDocument.TryCreateManagedDocument(this, out document, out error);
+		}
+
 		public override DsDocumentInfo? SerializedDocument => null;
 
 		/// <inheritdoc/>
-		public override IDsDocumentNameKey Key => new FilenameKey(Filename);
+		public override IDsDocumentNameKey Key => BundleDocumentKey.Entry(
+			BundleDocument.SourceBundleFilename, Entry.RelativePath);
+
+		/// <inheritdoc/>
+		protected override TList<IDsDocument> CreateChildren() {
+			// The metadata document has no generic document children. The bundle tree node performs
+			// activation only for an explicitly expanded/selected managed entry, then creates the
+			// annotated assembly wrapper that feeds the normal module-node provider.
+			return new TList<IDsDocument>();
+		}
 	}
 }

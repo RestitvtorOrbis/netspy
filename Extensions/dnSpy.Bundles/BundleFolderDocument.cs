@@ -42,7 +42,8 @@ namespace dnSpy.Bundles.Extension {
 		public override DsDocumentInfo? SerializedDocument => null;
 
 		/// <inheritdoc/>
-		public override IDsDocumentNameKey Key => new FilenameKey(Filename);
+		public override IDsDocumentNameKey Key => BundleDocumentKey.Folder(
+			BundleDocument.SourceBundleFilename, DisplayName);
 
 		/// <inheritdoc/>
 		protected override TList<IDsDocument> CreateChildren() {
@@ -55,7 +56,7 @@ namespace dnSpy.Bundles.Extension {
 		}
 
 		internal static string GetSyntheticFilename(BundleDsDocument bundleDocument, string childName) =>
-			bundleDocument.SourceFilename + "!/" + childName;
+			bundleDocument.SourceBundleFilename + "!/" + childName;
 
 		internal static string GetDisplayName(BundleFolderKind kind) => kind switch {
 			BundleFolderKind.Assemblies => "Assemblies",

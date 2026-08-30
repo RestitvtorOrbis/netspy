@@ -50,6 +50,7 @@ namespace dnSpy.Bundles.IntegrationTests {
 			Assert.Equal(document.Bundle.Entries.Select(a => a.RelativePath),
 				entries.Select(a => ((BundleEntryDocument)((DsDocumentNode)a).Document).Entry.RelativePath));
 			Assert.All(entries, node => Assert.IsAssignableFrom<IDecompileSelf>(node));
+			Assert.Equal(1, entries.Count(a => a.GetType().Name == "BundleManagedEntryDocumentNode"));
 		}
 
 		[Fact]
@@ -60,14 +61,11 @@ namespace dnSpy.Bundles.IntegrationTests {
 			Assert.NotNull(root);
 			var nodes = root.CreateChildren().SelectMany(a => a.CreateChildren()).ToArray();
 
-			// The BND-008 contract is metadata-only: even an assembly entry has no ModuleDef or
-			// PEImage until BND-009's selected-entry adapter is introduced.
-			Assert.All(nodes, node => {
-				var documentNode = (DsDocumentNode)node;
-				Assert.Null(documentNode.Document.ModuleDef);
-				Assert.Null(documentNode.Document.PEImage);
-				_ = node.ToString();
-			});
+			// Managed assembly nodes now have an assembly shape, but their metadata document keeps
+			// activation explicit. Rendering the inventory must not touch the lazy cache.
+			Assert.All(nodes, node => _ = node.ToString());
+			Assert.All(nodes.Select(a => (BundleEntryDocument)((DsDocumentNode)a).Document), entry =>
+				Assert.Null(entry.ManagedDocument));
 		}
 
 		[Fact]
@@ -88,8 +86,7 @@ namespace dnSpy.Bundles.IntegrationTests {
 			var managedNode = root.CreateChildren().Cast<DsDocumentNode>()
 				.SelectMany(a => a.CreateChildren()).Cast<DsDocumentNode>()
 				.Single(a => ((BundleEntryDocument)a.Document).IsManaged);
-			Assert.Null(managedNode.Document.ModuleDef);
-			Assert.Null(managedNode.Document.PEImage);
+			Assert.Null(((BundleEntryDocument)managedNode.Document).ManagedDocument);
 		}
 
 		[Fact]

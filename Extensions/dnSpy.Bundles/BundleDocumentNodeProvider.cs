@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using dnlib.DotNet;
 using dnSpy.Bundles;
 using dnSpy.Contracts.Decompiler;
 using dnSpy.Contracts.Documents;
@@ -30,6 +31,11 @@ namespace dnSpy.Bundles.Extension {
 		/// exercise the actual node contracts without constructing the WPF tree view.
 		/// </summary>
 		internal static DsDocumentNode? CreateNode(DsDocumentNode? owner, IDsDocument document) {
+			if (document is DsDotNetDocument assemblyDocument &&
+				assemblyDocument.Annotation<BundleAssemblyDocumentAnnotation>() is not null)
+				return new BundleAssemblyDocumentNode(assemblyDocument);
+			if (document is BundleEntryDocument managedEntry && managedEntry.IsManaged)
+				return new BundleManagedEntryDocumentNode(managedEntry);
 			if (document is BundleDsDocument bundle)
 				return new BundleDsDocumentNode(bundle);
 			if (document is BundleFolderDocument folder)
@@ -38,8 +44,118 @@ namespace dnSpy.Bundles.Extension {
 				return new BundleEntryDocumentNode(entry);
 			if (document is BundleErrorDocument error)
 				return new BundleErrorDocumentNode(error);
+			if (document is BundleEntryErrorDocument entryError)
+				return new BundleEntryErrorDocumentNode(entryError);
 			return null;
 		}
+
+	}
+
+	sealed class BundleManagedEntryDocumentNode : DsDocumentNode, IDecompileSelf {
+		public static readonly Guid NodeGuid = new Guid("46A7C26C-8A3B-4ED2-B8FA-71AF8B0A4A42");
+
+		readonly BundleEntryDocument document;
+
+		public BundleManagedEntryDocumentNode(BundleEntryDocument document)
+			: base(document) => this.document = document;
+
+		public override Guid Guid => NodeGuid;
+		// Do not inspect AssemblyDef here. Icons and inventory rendering must not activate the entry.
+		protected override ImageReference GetIcon(IDotNetImageService dnImgMgr) => DsImages.ModulePublic;
+		public override void Initialize() => TreeNode.LazyLoading = true;
+
+		public override IEnumerable<TreeNodeData> CreateChildren() {
+			if (!document.TryCreateManagedDocument(out BundleModuleDocument? module,
+				out Exception? error)) {
+				yield return CreateChildNode(this, new BundleEntryErrorDocument(document, error!));
+				yield break;
+			}
+
+			// A valid netmodule has no AssemblyDef. Keep it on dnSpy's ordinary module path instead
+			// of manufacturing an assembly wrapper whose normal node contract requires AssemblyDef.
+			if (module!.ModuleDef!.Assembly is null)
+				yield return CreateChildNode(this, module);
+			else {
+				DsDotNetDocument assemblyDocument = module.CreateAssemblyDocument();
+				yield return CreateChildNode(this, assemblyDocument);
+			}
+		}
+
+		protected override void WriteCore(ITextColorWriter output, IDecompiler decompiler,
+			DocumentNodeWriteOptions options) {
+			output.Write(BoxedTextColor.Text, document.Entry.RelativePath);
+			if ((options & DocumentNodeWriteOptions.ToolTip) != 0) {
+				output.WriteLine();
+				output.WriteFilename(Document.Filename);
+			}
+		}
+
+		public override FilterType GetFilterType(IDocumentTreeNodeFilter filter) =>
+			filter.GetResult(document).FilterType;
+
+		public bool Decompile(IDecompileNodeContext context) {
+			if (!document.TryCreateManagedDocument(out BundleModuleDocument? module,
+				out Exception? error)) {
+				context.ContentTypeString = ContentTypes.PlainText;
+				context.Output.Write($"Unable to load managed bundle entry '{document.Entry.RelativePath}':\n{error!.Message}",
+					BoxedTextColor.Error);
+				return true;
+			}
+
+			if (module!.ModuleDef!.Assembly is AssemblyDef assembly)
+				context.Decompiler.Decompile(assembly, context.Output, context.DecompilationContext);
+			else
+				context.Decompiler.Decompile(module.ModuleDef, context.Output,
+					context.DecompilationContext);
+			return true;
+		}
+
+		static DsDocumentNode CreateChildNode(DsDocumentNode owner, IDsDocument document) =>
+			owner.Context is not null
+				? owner.Context.DocumentTreeView.CreateNode(owner, document)
+				: BundleDocumentNodeProvider.CreateNode(owner, document)!;
+	}
+
+	sealed class BundleAssemblyDocumentNode : AssemblyDocumentNode {
+		public static readonly Guid NodeGuid = new Guid("A55E6BDA-DBD7-4F62-9CBF-5F3DFE18A39E");
+
+		public BundleAssemblyDocumentNode(IDsDotNetDocument document)
+			: base(document) {
+		}
+
+		public override Guid Guid => NodeGuid;
+		protected override ImageReference GetIcon(IDotNetImageService dnImgMgr) =>
+			dnImgMgr.GetImageReference(Document.AssemblyDef!);
+		public override void Initialize() => TreeNode.LazyLoading = true;
+
+		public override IEnumerable<TreeNodeData> CreateChildren() {
+			foreach (IDsDocument document in Document.Children) {
+				if (Context is not null)
+					yield return Context.DocumentTreeView.CreateNode(this, document);
+				else {
+					DsDocumentNode? node = BundleDocumentNodeProvider.CreateNode(this, document);
+					if (node is not null)
+						yield return node;
+				}
+			}
+		}
+
+		protected override void WriteCore(ITextColorWriter output, IDecompiler decompiler,
+			DocumentNodeWriteOptions options) {
+			if ((options & DocumentNodeWriteOptions.ToolTip) == 0) {
+				new NodeFormatter().Write(output, decompiler, Document.AssemblyDef!, false,
+					Context is not null && Context.ShowAssemblyVersion,
+					Context is not null && Context.ShowAssemblyPublicKeyToken);
+			}
+			else {
+				output.Write(Document.AssemblyDef!);
+				output.WriteLine();
+				output.WriteFilename(Document.Filename);
+			}
+		}
+
+		public override FilterType GetFilterType(IDocumentTreeNodeFilter filter) =>
+			filter.GetResult(Document.AssemblyDef!).FilterType;
 	}
 
 	sealed class BundleDsDocumentNode : DsDocumentNode {
@@ -240,6 +356,33 @@ namespace dnSpy.Bundles.Extension {
 		protected override void WriteCore(ITextColorWriter output, IDecompiler decompiler,
 			DocumentNodeWriteOptions options) => output.Write(BoxedTextColor.Text,
 			$"{Path.GetFileName(document.Filename)} [.NET Bundle error]");
+
+		public bool Decompile(IDecompileNodeContext context) {
+			context.ContentTypeString = ContentTypes.PlainText;
+			context.Output.Write(document.ErrorMessage, BoxedTextColor.Error);
+			return true;
+		}
+	}
+
+	sealed class BundleEntryErrorDocumentNode : DsDocumentNode, IDecompileSelf {
+		public static readonly Guid NodeGuid = new Guid("F8B5BE69-625A-45AB-BFCB-4B503B9E725B");
+
+		readonly BundleEntryErrorDocument document;
+
+		public BundleEntryErrorDocumentNode(BundleEntryErrorDocument document)
+			: base(document) => this.document = document;
+
+		public override Guid Guid => NodeGuid;
+		protected override ImageReference GetIcon(IDotNetImageService dnImgMgr) => DsImages.AssemblyError;
+
+		protected override void WriteCore(ITextColorWriter output, IDecompiler decompiler,
+			DocumentNodeWriteOptions options) {
+			output.Write(BoxedTextColor.Error, document.EntryDocument.Entry.RelativePath);
+			if ((options & DocumentNodeWriteOptions.ToolTip) != 0) {
+				output.WriteLine();
+				output.Write(BoxedTextColor.Error, document.ErrorMessage);
+			}
+		}
 
 		public bool Decompile(IDecompileNodeContext context) {
 			context.ContentTypeString = ContentTypes.PlainText;

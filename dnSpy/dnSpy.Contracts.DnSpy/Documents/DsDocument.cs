@@ -219,6 +219,7 @@ namespace dnSpy.Contracts.Documents {
 	/// </summary>
 	public class DsDotNetDocument : DsDotNetDocumentBase, IDisposable {
 		readonly bool isAsmNode;
+		readonly bool ownsModule;
 
 		/// <inheritdoc/>
 		public override IDsDocumentNameKey Key => FilenameKey.CreateFullPath(Filename);
@@ -233,10 +234,13 @@ namespace dnSpy.Contracts.Documents {
 		/// <param name="module">Module</param>
 		/// <param name="loadSyms">true to load symbols</param>
 		/// <param name="isAsmNode">true if it's an assembly node, false if it's a module node</param>
-		protected DsDotNetDocument(DsDocumentInfo documentInfo, ModuleDef module, bool loadSyms, bool isAsmNode)
+		/// <param name="ownsModule">true if disposing this document should dispose the module</param>
+		protected DsDotNetDocument(DsDocumentInfo documentInfo, ModuleDef module, bool loadSyms, bool isAsmNode,
+			bool ownsModule = true)
 			: base(module, loadSyms) {
 			this.documentInfo = documentInfo;
 			this.isAsmNode = isAsmNode;
+			this.ownsModule = ownsModule;
 		}
 
 		/// <inheritdoc/>
@@ -271,6 +275,15 @@ namespace dnSpy.Contracts.Documents {
 		/// <returns></returns>
 		public static DsDotNetDocument CreateAssembly(IDsDotNetDocument module) => new DsDotNetDocumentAsmWithMod(module);
 
+		/// <summary>
+		/// Creates an assembly wrapper around a module whose lifetime is owned by another document.
+		/// </summary>
+		/// <param name="module">Module document</param>
+		/// <param name="ownsModule">Whether disposing the wrapper should dispose the module</param>
+		/// <returns>Assembly wrapper</returns>
+		public static DsDotNetDocument CreateAssembly(IDsDotNetDocument module, bool ownsModule) =>
+			new DsDotNetDocumentAsmWithMod(module, ownsModule);
+
 		/// <inheritdoc/>
 		protected override TList<IDsDocument> CreateChildren() {
 			var asm = AssemblyDef;
@@ -290,14 +303,17 @@ namespace dnSpy.Contracts.Documents {
 		}
 
 		/// <inheritdoc/>
-		public void Dispose() => ModuleDef!.Dispose();
+		public void Dispose() {
+			if (ownsModule)
+				ModuleDef!.Dispose();
+		}
 	}
 
 	sealed class DsDotNetDocumentAsmWithMod : DsDotNetDocument {
 		IDsDotNetDocument? module;
 
-		public DsDotNetDocumentAsmWithMod(IDsDotNetDocument modmodule)
-			: base(modmodule.SerializedDocument ?? new DsDocumentInfo(), modmodule.ModuleDef!, false, true) => module = modmodule;
+		public DsDotNetDocumentAsmWithMod(IDsDotNetDocument modmodule, bool ownsModule = true)
+			: base(modmodule.SerializedDocument ?? new DsDocumentInfo(), modmodule.ModuleDef!, false, true, ownsModule) => module = modmodule;
 
 		protected override TList<IDsDocument> CreateChildren() {
 			Debug2.Assert(module is not null);
