@@ -926,7 +926,7 @@ The arrows are mandatory execution order, not merely opportunities inferred from
 | BND-007 | PR-03 | Completed | `feat(BND-007): add bundle document provider` | Extension and Windows integration test assembly compile for net10.0-windows; 74 portable tests pass with 3 historical skips; Windows test execution is blocked locally by unavailable Microsoft.WindowsDesktop.App runtime |
 | BND-008 | PR-03 | Completed | `feat(BND-008): add bundle tree views` | Extension/integration assemblies compile cleanly for net10.0-windows; 74 portable tests pass with 3 historical skips; focused WPF tests require Windows Desktop runtime unavailable locally |
 | BND-009 | PR-03 | Completed | `feat(BND-009): load bundled managed modules` | Extension/integration assemblies compile cleanly for net10.0-windows; 74 portable tests pass with 3 historical skips; managed-tree runtime tests require Windows Desktop runtime unavailable locally |
-| BND-010 | PR-03 | Planned | — | — |
+| BND-010 | PR-03 | Completed | `feat(BND-010): resolve same-bundle assemblies` | Contextual resolver integration project builds with 0 warnings and 0 errors; exact resolver and ordinary-regression filters are blocked locally by unavailable Microsoft.WindowsDesktop.App 10.0.0; `git diff --check` passes; full `build.ps1` is unavailable because `pwsh` is not installed |
 | BND-011 | PR-03 | Planned | — | — |
 | BND-012 | PR-03 | Planned | — | — |
 | BND-013 | PR-04 | Planned | — | — |
