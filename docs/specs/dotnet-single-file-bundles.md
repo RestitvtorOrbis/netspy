@@ -929,7 +929,7 @@ The arrows are mandatory execution order, not merely opportunities inferred from
 | BND-010 | PR-03 | Completed | `feat(BND-010): resolve same-bundle assemblies` | Contextual resolver integration project builds with 0 warnings and 0 errors; exact resolver and ordinary-regression filters are blocked locally by unavailable Microsoft.WindowsDesktop.App 10.0.0; `git diff --check` passes; full `build.ps1` is unavailable because `pwsh` is not installed |
 | BND-011 | PR-03 | Completed | `test(BND-011): prove bundle decompile integration` | Decompiler/analyzer integration project builds with 0 errors (1 existing package warning on the final incremental build); exact bundle and ordinary decompiler filters are blocked locally by unavailable Microsoft.WindowsDesktop.App 10.0.0; `git diff --check` passes; full `build.ps1` is unavailable because `pwsh` is not installed |
 | BND-012 | PR-03 | Completed | `feat(BND-012): add bundle debug compatibility` | Debug compatibility integration project builds with 0 errors (6 existing warnings); exact bundle and ordinary debug filters are blocked locally by unavailable Microsoft.WindowsDesktop.App 10.0.0; `git diff --check` passes; full `build.ps1` is unavailable because `pwsh` is not installed |
-| BND-013 | PR-04 | Planned | — | — |
+| BND-013 | PR-04 | Completed | `refactor(BND-013): share module serialization` | AsmEditor integration project builds with 0 errors (6 existing warnings); exact serialization and ordinary-save filters are blocked locally by unavailable Microsoft.WindowsDesktop.App 10.0.0; `git diff --check` passes; full `build.ps1` is unavailable because `pwsh` is not installed |
 | BND-014 | PR-04 | Planned | — | — |
 | BND-015 | PR-04 | Planned | — | — |
 | BND-016 | PR-05 | Planned | — | — |

@@ -177,16 +177,7 @@ namespace dnSpy.AsmEditor.SaveModule {
 
 		void Save(SaveModuleOptionsVM vm) {
 			fileProgress = new ModuleFileProgress();
-			var opts = vm.CreateWriterOptions();
-			opts.ProgressUpdated += ModuleWriter_ProgressUpdated;
-			opts.Logger = this;
-			// Make sure the order of the interfaces don't change, see https://github.com/dotnet/roslyn/issues/3905
-			opts.MetadataOptions.Flags |= MetadataFlags.RoslynSortInterfaceImpl;
-			var filename = vm.FileName;
-			if (opts is NativeModuleWriterOptions)
-				((ModuleDefMD)vm.Module).NativeWrite(filename, (NativeModuleWriterOptions)opts);
-			else
-				vm.Module.Write(filename, (ModuleWriterOptions)opts);
+			ModuleSerializationService.WriteToFile(vm, vm.FileName, this, ModuleWriter_ProgressUpdated);
 		}
 
 		void Save(SaveHexOptionsVM hex, ref byte[]? buffer) {
