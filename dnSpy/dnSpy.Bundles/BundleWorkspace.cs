@@ -12,7 +12,7 @@ namespace dnSpy.Bundles {
 	/// </summary>
 	public sealed class BundleWorkspace : IDisposable {
 		readonly object gate = new object();
-		readonly Dictionary<BundleEntry, Replacement> replacements =
+		Dictionary<BundleEntry, Replacement> replacements =
 			new Dictionary<BundleEntry, Replacement>(BundleEntryReferenceComparer.Instance);
 		int disposed;
 
@@ -48,6 +48,23 @@ namespace dnSpy.Bundles {
 					EnsureNotDisposed();
 					return replacements.Count != 0;
 				}
+			}
+		}
+
+		/// <summary>Returns whether one entry currently has replacement bytes.</summary>
+		public bool HasReplacement(BundleEntry entry) {
+			lock (gate) {
+				EnsureEntry(entry);
+				return replacements.ContainsKey(entry);
+			}
+		}
+
+		/// <summary>Gets replacement metadata, or <see langword="null"/> for an original entry.</summary>
+		public BundleReplacementInfo? GetReplacementInfo(BundleEntry entry) {
+			lock (gate) {
+				EnsureEntry(entry);
+				return replacements.TryGetValue(entry, out Replacement? replacement)
+					? replacement.Info : null;
 			}
 		}
 
@@ -112,21 +129,47 @@ namespace dnSpy.Bundles {
 		/// Installs a replacement after validating all arguments. The input bytes are copied.
 		/// </summary>
 		public void SetReplacement(BundleEntry entry, byte[] bytes, BundleReplacementInfo info) {
-			if (bytes is null)
-				throw new ArgumentNullException(nameof(bytes));
-			if (info is null)
-				throw new ArgumentNullException(nameof(info));
-			BundleWorkspaceChangedEventArgs change;
+			SetReplacements(new[] { new BundleWorkspaceReplacement(entry, bytes, info) });
+		}
+
+		/// <summary>
+		/// Installs all candidates as one workspace transaction. Every argument is validated and
+		/// copied before the replacement map is swapped, so a failed batch preserves prior state.
+		/// </summary>
+		public void SetReplacements(IReadOnlyList<BundleWorkspaceReplacement> candidates) {
+			if (candidates is null)
+				throw new ArgumentNullException(nameof(candidates));
+			if (candidates.Count == 0)
+				return;
+
+			BundleWorkspaceChangedEventArgs[] changes;
 			lock (gate) {
-				EnsureEntry(entry);
-				// Copy before changing the dictionary so validation/copy failures leave the
-				// previously installed replacement untouched.
-				byte[] copiedBytes = (byte[])bytes.Clone();
-				replacements[entry] = new Replacement(copiedBytes, info);
-				change = new BundleWorkspaceChangedEventArgs(entry,
-					BundleWorkspaceChangeKind.ReplacementSet, info);
+				EnsureNotDisposed();
+				var pending = new Dictionary<BundleEntry, Replacement>(
+					BundleEntryReferenceComparer.Instance);
+				var pendingEntries = new List<KeyValuePair<BundleEntry, Replacement>>(candidates.Count);
+				foreach (BundleWorkspaceReplacement candidate in candidates) {
+					if (candidate is null)
+						throw new ArgumentException("The replacement list contains a null candidate.", nameof(candidates));
+					EnsureEntry(candidate.Entry);
+					if (pending.ContainsKey(candidate.Entry))
+						throw new ArgumentException("The replacement list contains a duplicate entry.", nameof(candidates));
+					// Clone into a temporary map. No workspace state is changed until every clone succeeds.
+					var replacement = new Replacement((byte[])candidate.Bytes.Clone(), candidate.Info);
+					pending.Add(candidate.Entry, replacement);
+					pendingEntries.Add(new KeyValuePair<BundleEntry, Replacement>(candidate.Entry, replacement));
+				}
+
+				var updated = new Dictionary<BundleEntry, Replacement>(replacements,
+					BundleEntryReferenceComparer.Instance);
+				foreach (KeyValuePair<BundleEntry, Replacement> candidate in pendingEntries)
+					updated[candidate.Key] = candidate.Value;
+				replacements = updated;
+				changes = pendingEntries.Select(a => new BundleWorkspaceChangedEventArgs(a.Key,
+					BundleWorkspaceChangeKind.ReplacementSet, a.Value.Info)).ToArray();
 			}
-			Changed?.Invoke(this, change);
+			foreach (BundleWorkspaceChangedEventArgs change in changes)
+				Changed?.Invoke(this, change);
 		}
 
 		/// <summary>Reverts one replacement and reports whether one existed.</summary>

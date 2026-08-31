@@ -94,6 +94,10 @@ namespace dnSpy.Bundles.Tests {
 			BundleEntry foreignEntry = foreignFactory.Result.Bundle!.Entries[0];
 			var info = new BundleReplacementInfo("valid");
 			workspace.SetReplacement(entry, new byte[] { 30, 31 }, info);
+			Assert.Throws<ArgumentException>(() => workspace.SetReplacements(new[] {
+				new BundleWorkspaceReplacement(entry, new byte[] { 32 }, new BundleReplacementInfo("batch")),
+				new BundleWorkspaceReplacement(foreignEntry, new byte[] { 33 }, new BundleReplacementInfo("foreign")),
+			}));
 
 			Assert.Throws<ArgumentException>(() => workspace.SetReplacement(foreignEntry,
 				new byte[] { 40 }, new BundleReplacementInfo()));

@@ -20,6 +20,7 @@ namespace dnSpy.Bundles.Extension {
 		readonly Func<BundleEntry, Stream> openLogicalRead;
 		readonly IAssemblyResolver? globalAssemblyResolver;
 		readonly BundleAssemblyResolver bundleAssemblyResolver;
+		readonly BundleWorkspace workspace;
 		readonly object managedDocumentsLock = new object();
 		readonly Dictionary<int, BundleModuleDocument> managedDocuments = new Dictionary<int, BundleModuleDocument>();
 		readonly Dictionary<int, Exception> managedDocumentErrors = new Dictionary<int, Exception>();
@@ -34,7 +35,7 @@ namespace dnSpy.Bundles.Extension {
 				throw new ArgumentNullException(nameof(bundle));
 			this.serializedDocument = serializedDocument;
 			sourceFilename = GetFullPath(bundle.Filename);
-			Bundle = bundle;
+			workspace = new BundleWorkspace(bundle);
 			TextViewOptions = textViewOptions ?? BundleTextViewOptions.Default;
 			this.openLogicalRead = openLogicalRead ?? (static entry => entry.OpenLogicalRead());
 			globalAssemblyResolver = assemblyResolver ?? documentService?.AssemblyResolver;
@@ -43,7 +44,13 @@ namespace dnSpy.Bundles.Extension {
 		}
 
 		/// <summary>Validated bundle metadata and lazy entry access.</summary>
-		public BundleFile Bundle { get; }
+		public BundleFile Bundle => workspace.Bundle;
+
+		/// <summary>
+		/// Transactional workspace for this bundle. It owns <see cref="Bundle"/> and never writes
+		/// to the source executable.
+		/// </summary>
+		public BundleWorkspace Workspace => workspace;
 
 		/// <summary>Options used by bounded text previews of entries in this bundle.</summary>
 		public BundleTextViewOptions TextViewOptions { get; }
@@ -68,7 +75,36 @@ namespace dnSpy.Bundles.Extension {
 		public string SourceBundleFilename => SourceFilename;
 
 		/// <inheritdoc/>
-		public bool HasPendingChanges => false;
+		public bool HasPendingChanges => workspace.HasChanges;
+
+		/// <inheritdoc/>
+		public void SetWorkspaceReplacements(IReadOnlyList<dnSpy.Contracts.Documents.Bundles.BundleWorkspaceReplacement> replacements) {
+			if (replacements is null)
+				throw new ArgumentNullException(nameof(replacements));
+			var candidates = new List<dnSpy.Bundles.BundleWorkspaceReplacement>(replacements.Count);
+			foreach (dnSpy.Contracts.Documents.Bundles.BundleWorkspaceReplacement replacement in replacements) {
+				if (replacement is null)
+					throw new ArgumentException("The replacement list contains a null candidate.", nameof(replacements));
+				if (replacement.Document is not BundleModuleDocument moduleDocument ||
+					!ReferenceEquals(moduleDocument.BundleDocument, this))
+					throw new ArgumentException("The replacement document does not belong to this bundle.", nameof(replacements));
+				var info = new BundleReplacementInfo(
+					$"Applied managed module replacement for {moduleDocument.BundleRelativePath}",
+					ToCoreDisposition(replacement.StrongNameDisposition),
+					replacement.StrongNameKeyFileName);
+				// Each candidate is fully validated before BundleWorkspace performs its atomic swap.
+				candidates.Add(moduleDocument.CreateWorkspaceReplacement(replacement.Bytes, info));
+			}
+			workspace.SetReplacements(candidates);
+		}
+
+		static BundleStrongNameDisposition ToCoreDisposition(
+			DsBundleStrongNameDisposition disposition) => disposition switch {
+			DsBundleStrongNameDisposition.NotRequired => BundleStrongNameDisposition.NotRequired,
+			DsBundleStrongNameDisposition.Removed => BundleStrongNameDisposition.Removed,
+			DsBundleStrongNameDisposition.ReSigned => BundleStrongNameDisposition.ReSigned,
+			_ => throw new ArgumentOutOfRangeException(nameof(disposition)),
+		};
 
 		/// <summary>
 		/// Creates the module context for a selected managed entry. Every child receives this
@@ -226,7 +262,7 @@ namespace dnSpy.Bundles.Extension {
 			}
 			finally {
 				bundleAssemblyResolver.Dispose();
-				Bundle.Dispose();
+				workspace.Dispose();
 			}
 		}
 

@@ -5,6 +5,7 @@ using System;
 using System.Threading;
 using dnlib.DotNet;
 using dnlib.PE;
+using dnSpy.Bundles;
 using dnSpy.Contracts.Documents;
 using dnSpy.Contracts.Documents.Bundles;
 
@@ -43,7 +44,11 @@ namespace dnSpy.Bundles.Extension {
 		public string BundleRelativePath => entryDocument.Entry.RelativePath;
 
 		/// <inheritdoc/>
-		public bool HasWorkspaceReplacement => false;
+		public bool HasWorkspaceReplacement => BundleDocument.Workspace.HasReplacement(Entry);
+
+		/// <summary>Metadata for the current workspace replacement, if one is installed.</summary>
+		public BundleReplacementInfo? WorkspaceReplacementInfo =>
+			BundleDocument.Workspace.GetReplacementInfo(Entry);
 
 		/// <inheritdoc/>
 		public bool IsReadyToRun => BundleManagedEntryAdapter.IsReadyToRun(ModuleDef!);
@@ -73,12 +78,77 @@ namespace dnSpy.Bundles.Extension {
 		}
 
 		/// <inheritdoc/>
-		public void SetWorkspaceReplacement(byte[] bytes) =>
-			throw new NotSupportedException("Bundle workspace editing is not available yet.");
+		public void SetWorkspaceReplacement(byte[] bytes) {
+			// Validate completely before touching the workspace. A replacement is deliberately
+			// reopened with dnlib at this boundary so malformed output cannot become dirty state.
+			using ModuleDefMD replacement = ValidateWorkspaceReplacement(bytes);
+			if (IsStrongNameRequired(ModuleDef!))
+				throw new InvalidOperationException(
+					"An explicit strong-name disposition is required before replacing a signed bundle entry.");
+			const BundleStrongNameDisposition disposition = BundleStrongNameDisposition.NotRequired;
+			var info = new BundleReplacementInfo(
+				$"Applied managed module replacement for {BundleRelativePath}", disposition);
+			BundleDocument.Workspace.SetReplacements(new[] {
+				new BundleWorkspaceReplacement(Entry, bytes, info),
+			});
+		}
+
+		internal BundleWorkspaceReplacement CreateWorkspaceReplacement(byte[] bytes, BundleReplacementInfo info) {
+			if (info is null)
+				throw new ArgumentNullException(nameof(info));
+			using ModuleDefMD replacement = ValidateWorkspaceReplacement(bytes);
+			ValidateStrongNameDisposition(ModuleDef!, replacement, info);
+			return new BundleWorkspaceReplacement(Entry, bytes, info);
+		}
+
+		ModuleDefMD ValidateWorkspaceReplacement(byte[] bytes) {
+			if (bytes is null)
+				throw new ArgumentNullException(nameof(bytes));
+			if (IsReadyToRun)
+				throw new NotSupportedException("ReadyToRun bundle entries cannot be rewritten.");
+			if (bytes.LongLength > BundleReaderOptions.DefaultMaximumEntrySize)
+				throw new InvalidOperationException("The replacement exceeds the configured bundle entry size limit.");
+			return ModuleDefMD.Load(bytes);
+		}
 
 		/// <inheritdoc/>
-		public void RevertWorkspaceReplacement() =>
-			throw new NotSupportedException("Bundle workspace editing is not available yet.");
+		public void RevertWorkspaceReplacement() => BundleDocument.Workspace.Revert(Entry);
+
+		static bool IsStrongNameRequired(ModuleDef module) {
+			var publicKey = module.Assembly?.PublicKey;
+			return (publicKey is not null && !publicKey.IsNullOrEmpty) || module.IsStrongNameSigned;
+		}
+
+		static void ValidateStrongNameDisposition(ModuleDef original, ModuleDef replacement,
+			BundleReplacementInfo info) {
+			bool originalRequiresStrongName = IsStrongNameRequired(original);
+			switch (info.StrongNameDisposition) {
+			case BundleStrongNameDisposition.NotRequired:
+				if (originalRequiresStrongName)
+					throw new InvalidOperationException(
+						"A signed bundle entry requires an explicit remove or re-sign disposition.");
+				break;
+			case BundleStrongNameDisposition.Removed:
+				if (IsStrongNameRequired(replacement) || HasStrongNameDirectory(replacement))
+					throw new InvalidOperationException(
+						"The replacement still has strong-name metadata after removal was selected.");
+				break;
+			case BundleStrongNameDisposition.ReSigned:
+				if (!IsStrongNameRequired(replacement) || !HasStrongNameDirectory(replacement))
+					throw new InvalidOperationException(
+						"The replacement has no strong-name signature after re-signing was selected.");
+				break;
+			default:
+				throw new ArgumentOutOfRangeException(nameof(info.StrongNameDisposition));
+			}
+		}
+
+		static bool HasStrongNameDirectory(ModuleDef module) {
+			if (module is not ModuleDefMD moduleMD)
+				return false;
+			var directory = moduleMD.Metadata.ImageCor20Header.StrongNameSignature;
+			return directory.VirtualAddress != 0 || directory.Size != 0;
+		}
 
 		/// <inheritdoc/>
 		/// <summary>
