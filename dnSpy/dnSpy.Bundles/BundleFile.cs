@@ -153,6 +153,7 @@ namespace dnSpy.Bundles {
 		}
 
 		internal bool IsDisposed => Volatile.Read(ref disposed) != 0;
+		internal bool HasSourceMapping => mappingFile is not null;
 
 		/// <summary>Releases resources held by a future entry reader.</summary>
 		public void Dispose() {
