@@ -17,6 +17,9 @@ namespace dnSpy.Contracts.Documents.Bundles {
 		/// <summary>Whether the workspace currently has replacement bytes for this entry.</summary>
 		bool HasWorkspaceReplacement { get; }
 
+		/// <summary>Last workspace operation error, if any.</summary>
+		System.Exception? WorkspaceError { get; }
+
 		/// <summary>Whether this entry has been identified as ReadyToRun.</summary>
 		bool IsReadyToRun { get; }
 
@@ -25,5 +28,8 @@ namespace dnSpy.Contracts.Documents.Bundles {
 
 		/// <summary>Restores the original logical entry bytes.</summary>
 		void RevertWorkspaceReplacement();
+
+		/// <summary>Retains an operation failure without changing replacement bytes.</summary>
+		void RecordWorkspaceError(System.Exception error);
 	}
 }

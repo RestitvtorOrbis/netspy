@@ -14,10 +14,16 @@ namespace dnSpy.Contracts.Documents.Bundles {
 		/// <summary>Whether an entry replacement is pending in the bundle workspace.</summary>
 		bool HasPendingChanges { get; }
 
+		/// <summary>Whether a workspace operation error is visible for an entry.</summary>
+		bool HasWorkspaceErrors { get; }
+
 		/// <summary>
 		/// Atomically installs replacement candidates belonging to this bundle workspace.
 		/// Implementations leave existing replacements unchanged if validation fails.
 		/// </summary>
 		void SetWorkspaceReplacements(IReadOnlyList<BundleWorkspaceReplacement> replacements);
+
+		/// <summary>Restores all entries to their original logical content.</summary>
+		void RevertAllWorkspaceChanges();
 	}
 }

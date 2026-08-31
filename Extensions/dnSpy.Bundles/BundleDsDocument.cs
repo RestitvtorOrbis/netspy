@@ -26,6 +26,9 @@ namespace dnSpy.Bundles.Extension {
 		readonly Dictionary<int, Exception> managedDocumentErrors = new Dictionary<int, Exception>();
 		int disposed;
 
+		/// <summary>Raised after this bundle has released its workspace resources.</summary>
+		internal event EventHandler? Disposed;
+
 		public BundleDsDocument(DsDocumentInfo serializedDocument, BundleFile bundle,
 			BundleTextViewOptions? textViewOptions = null,
 			Func<BundleEntry, Stream>? openLogicalRead = null,
@@ -78,6 +81,9 @@ namespace dnSpy.Bundles.Extension {
 		public bool HasPendingChanges => workspace.HasChanges;
 
 		/// <inheritdoc/>
+		public bool HasWorkspaceErrors => workspace.HasErrors;
+
+		/// <inheritdoc/>
 		public void SetWorkspaceReplacements(IReadOnlyList<dnSpy.Contracts.Documents.Bundles.BundleWorkspaceReplacement> replacements) {
 			if (replacements is null)
 				throw new ArgumentNullException(nameof(replacements));
@@ -97,6 +103,9 @@ namespace dnSpy.Bundles.Extension {
 			}
 			workspace.SetReplacements(candidates);
 		}
+
+		/// <inheritdoc/>
+		public void RevertAllWorkspaceChanges() => workspace.RevertAll();
 
 		static BundleStrongNameDisposition ToCoreDisposition(
 			DsBundleStrongNameDisposition disposition) => disposition switch {
@@ -151,8 +160,10 @@ namespace dnSpy.Bundles.Extension {
 					return document;
 				}
 				catch (Exception ex) {
-					if (ex is not OutOfMemoryException && ex is not StackOverflowException)
+					if (ex is not OutOfMemoryException && ex is not StackOverflowException) {
 						managedDocumentErrors[entryDocument.Entry.Index] = ex;
+						workspace.RecordError(entryDocument.Entry, ex);
+					}
 					throw;
 				}
 				finally {
@@ -189,8 +200,10 @@ namespace dnSpy.Bundles.Extension {
 					return document;
 				}
 				catch (Exception ex) {
-					if (ex is not OutOfMemoryException && ex is not StackOverflowException)
+					if (ex is not OutOfMemoryException && ex is not StackOverflowException) {
 						managedDocumentErrors[entry.Index] = ex;
+						workspace.RecordError(entry, ex);
+					}
 					throw;
 				}
 				finally {
@@ -263,6 +276,9 @@ namespace dnSpy.Bundles.Extension {
 			finally {
 				bundleAssemblyResolver.Dispose();
 				workspace.Dispose();
+				EventHandler? disposed = Disposed;
+				Disposed = null;
+				disposed?.Invoke(this, EventArgs.Empty);
 			}
 		}
 

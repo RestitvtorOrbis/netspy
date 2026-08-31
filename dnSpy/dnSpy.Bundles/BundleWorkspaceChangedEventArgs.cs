@@ -14,16 +14,25 @@ namespace dnSpy.Bundles {
 		Replacement = ReplacementSet,
 		/// <summary>Alias for <see cref="Reverted"/>.</summary>
 		Revert = Reverted,
+		/// <summary>A workspace operation failed for this entry.</summary>
+		Error,
 	}
 
 	/// <summary>Event data for a <see cref="BundleWorkspace"/> mutation.</summary>
 	public sealed class BundleWorkspaceChangedEventArgs : EventArgs {
 		/// <summary>Creates event data for an entry mutation.</summary>
 		public BundleWorkspaceChangedEventArgs(BundleEntry entry, BundleWorkspaceChangeKind changeKind,
-			BundleReplacementInfo? replacementInfo) {
+			BundleReplacementInfo? replacementInfo)
+			: this(entry, changeKind, replacementInfo, null) {
+		}
+
+		/// <summary>Creates event data for an entry mutation or operation failure.</summary>
+		public BundleWorkspaceChangedEventArgs(BundleEntry entry, BundleWorkspaceChangeKind changeKind,
+			BundleReplacementInfo? replacementInfo, Exception? error) {
 			Entry = entry ?? throw new ArgumentNullException(nameof(entry));
 			ChangeKind = changeKind;
 			ReplacementInfo = replacementInfo;
+			Error = error;
 		}
 
 		/// <summary>Entry whose current content changed.</summary>
@@ -32,9 +41,13 @@ namespace dnSpy.Bundles {
 		public BundleWorkspaceChangeKind ChangeKind { get; }
 		/// <summary>Metadata installed by a replacement, or reverted metadata.</summary>
 		public BundleReplacementInfo? ReplacementInfo { get; }
+		/// <summary>The operation failure, or <see langword="null"/> for successful changes.</summary>
+		public Exception? Error { get; }
 		/// <summary>True when this event represents a replacement installation.</summary>
 		public bool IsReplacement => ChangeKind == BundleWorkspaceChangeKind.ReplacementSet;
 		/// <summary>True when this event represents a revert.</summary>
 		public bool IsRevert => ChangeKind == BundleWorkspaceChangeKind.Reverted;
+		/// <summary>True when this event reports a failed workspace operation.</summary>
+		public bool IsError => ChangeKind == BundleWorkspaceChangeKind.Error;
 	}
 }

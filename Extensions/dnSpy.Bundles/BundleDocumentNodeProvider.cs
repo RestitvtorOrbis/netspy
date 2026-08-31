@@ -5,6 +5,9 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Threading;
+using System.Windows;
+using System.Windows.Threading;
 using dnlib.DotNet;
 using dnSpy.Bundles;
 using dnSpy.Contracts.Decompiler;
@@ -84,6 +87,11 @@ namespace dnSpy.Bundles.Extension {
 		protected override void WriteCore(ITextColorWriter output, IDecompiler decompiler,
 			DocumentNodeWriteOptions options) {
 			output.Write(BoxedTextColor.Text, document.Entry.RelativePath);
+			string state = BundleWorkspaceTreeState.GetEntryStateSuffix(
+				document.BundleDocument.Workspace, document.Entry);
+			if (state.Length != 0)
+				output.Write(document.WorkspaceState == BundleWorkspaceEntryState.Error
+					? BoxedTextColor.Error : BoxedTextColor.Comment, state);
 			if ((options & DocumentNodeWriteOptions.ToolTip) != 0) {
 				output.WriteLine();
 				output.WriteFilename(Document.Filename);
@@ -149,32 +157,54 @@ namespace dnSpy.Bundles.Extension {
 					Context is not null && Context.ShowAssemblyPublicKeyToken);
 				if (annotation?.ModuleDocument.IsReadyToRun == true)
 					output.Write(BoxedTextColor.Comment, " [ReadyToRun]");
+				WriteWorkspaceState(output, annotation);
 			}
 			else {
 				output.Write(Document.AssemblyDef!);
 				if (annotation?.ModuleDocument.IsReadyToRun == true)
 					output.Write(BoxedTextColor.Comment, " [ReadyToRun]");
+				WriteWorkspaceState(output, annotation);
 				output.WriteLine();
 				output.WriteFilename(Document.Filename);
 			}
+		}
+
+		static void WriteWorkspaceState(ITextColorWriter output,
+			BundleAssemblyDocumentAnnotation? annotation) {
+			if (annotation is null)
+				return;
+			string state = BundleWorkspaceTreeState.GetEntryStateSuffix(
+				annotation.ModuleDocument.BundleDocument.Workspace, annotation.ModuleDocument.Entry);
+			if (state.Length != 0)
+				output.Write(annotation.ModuleDocument.WorkspaceState == BundleWorkspaceEntryState.Error
+					? BoxedTextColor.Error : BoxedTextColor.Comment, state);
 		}
 
 		public override FilterType GetFilterType(IDocumentTreeNodeFilter filter) =>
 			filter.GetResult(Document.AssemblyDef!).FilterType;
 	}
 
-	sealed class BundleDsDocumentNode : DsDocumentNode {
+	sealed class BundleDsDocumentNode : DsDocumentNode, IDisposable {
 		public static readonly Guid NodeGuid = new Guid("21AFC3F2-8A04-4F90-92EA-4F1C7D77A2BB");
 
 		readonly BundleDsDocument document;
+		Dispatcher? uiDispatcher;
+		int disposed;
 
 		public BundleDsDocumentNode(BundleDsDocument document)
-			: base(document) => this.document = document;
+			: base(document) {
+			this.document = document;
+			document.Workspace.Changed += Workspace_Changed;
+			document.Disposed += Document_Disposed;
+		}
 
 		public override Guid Guid => NodeGuid;
 		protected override ImageReference GetIcon(IDotNetImageService dnImgMgr) => DsImages.AssemblyExe;
 		protected override ImageReference? GetExpandedIcon(IDotNetImageService dnImgMgr) => DsImages.AssemblyExe;
-		public override void Initialize() => TreeNode.LazyLoading = true;
+		public override void Initialize() {
+			Volatile.Write(ref uiDispatcher, Dispatcher.CurrentDispatcher);
+			TreeNode.LazyLoading = true;
+		}
 
 		public override IEnumerable<TreeNodeData> CreateChildren() {
 			foreach (IDsDocument child in document.Children)
@@ -185,10 +215,30 @@ namespace dnSpy.Bundles.Extension {
 			DocumentNodeWriteOptions options) {
 			output.WriteFilename(Path.GetFileName(document.Filename));
 			output.Write(BoxedTextColor.Text, " [.NET Bundle]");
+			string state = BundleWorkspaceTreeState.GetBundleStateSuffix(document);
+			if (state.Length != 0)
+				output.Write(document.HasWorkspaceErrors ? BoxedTextColor.Error : BoxedTextColor.Comment, state);
 			if ((options & DocumentNodeWriteOptions.ToolTip) != 0) {
 				output.WriteLine();
 				output.Write(BoxedTextColor.Text, $"Entries: {document.Bundle.Entries.Count.ToString(CultureInfo.InvariantCulture)}");
 			}
+		}
+
+		internal bool IsDisposed => Volatile.Read(ref disposed) != 0;
+
+		void Workspace_Changed(object? sender, BundleWorkspaceChangedEventArgs e) {
+			if (!IsDisposed)
+				BundleWorkspaceTreeState.RefreshBundleTree(this, Volatile.Read(ref uiDispatcher));
+		}
+
+		void Document_Disposed(object? sender, EventArgs e) => Dispose();
+
+		public void Dispose() {
+			if (Interlocked.Exchange(ref disposed, 1) != 0)
+				return;
+			document.Workspace.Changed -= Workspace_Changed;
+			document.Disposed -= Document_Disposed;
+			Volatile.Write(ref uiDispatcher, null);
 		}
 
 		static DsDocumentNode CreateChildNode(DsDocumentNode owner, IDsDocument document) =>
@@ -238,6 +288,11 @@ namespace dnSpy.Bundles.Extension {
 		protected override void WriteCore(ITextColorWriter output, IDecompiler decompiler,
 			DocumentNodeWriteOptions options) {
 			output.Write(BoxedTextColor.Text, document.Entry.RelativePath);
+			string state = BundleWorkspaceTreeState.GetEntryStateSuffix(
+				document.BundleDocument.Workspace, document.Entry);
+			if (state.Length != 0)
+				output.Write(document.WorkspaceState == BundleWorkspaceEntryState.Error
+					? BoxedTextColor.Error : BoxedTextColor.Comment, state);
 			if ((options & DocumentNodeWriteOptions.ToolTip) != 0) {
 				output.WriteLine();
 				WriteMetadata(output, document.Entry);
@@ -382,7 +437,7 @@ namespace dnSpy.Bundles.Extension {
 
 		protected override void WriteCore(ITextColorWriter output, IDecompiler decompiler,
 			DocumentNodeWriteOptions options) {
-			output.Write(BoxedTextColor.Error, document.EntryDocument.Entry.RelativePath);
+			output.Write(BoxedTextColor.Error, document.EntryDocument.Entry.RelativePath + " [error]");
 			if ((options & DocumentNodeWriteOptions.ToolTip) != 0) {
 				output.WriteLine();
 				output.Write(BoxedTextColor.Error, document.ErrorMessage);

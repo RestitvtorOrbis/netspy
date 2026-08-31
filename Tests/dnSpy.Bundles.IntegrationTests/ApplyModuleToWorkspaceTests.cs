@@ -129,10 +129,17 @@ namespace dnSpy.Bundles.IntegrationTests {
 			IDsBundleEntryDocument r2r = DispatchProxy.Create<IDsBundleEntryDocument, ReadyToRunDocumentProxy>();
 			((ReadyToRunDocumentProxy)(object)r2r).Module = module.ModuleDef!;
 			((ReadyToRunDocumentProxy)(object)r2r).BundleDocument = module.BundleDocument;
+			((ReadyToRunDocumentProxy)(object)r2r).ModuleDocument = module;
 			Assert.False(ApplyUsingAsmEditorCommand(new IDsBundleEntryDocument[] { module, r2r },
 				messageBox: messageBox));
 			Assert.Contains(messageBox.Messages, a => a.Contains("ReadyToRun", StringComparison.Ordinal));
+			Assert.True(document.HasWorkspaceErrors);
+			Assert.Equal(BundleWorkspaceEntryState.Error, module.WorkspaceState);
 			Assert.Equal(originalReplacement, Read(document.Workspace.OpenCurrentRead(entry.Entry)));
+			Assert.True(document.Workspace.Revert(entry.Entry));
+			Assert.False(document.HasWorkspaceErrors);
+			Assert.Equal(Read(document.Workspace.OpenOriginalRead(entry.Entry)),
+				Read(document.Workspace.OpenCurrentRead(entry.Entry)));
 		}
 
 		[Fact]
@@ -236,6 +243,7 @@ namespace dnSpy.Bundles.IntegrationTests {
 		sealed class ReadyToRunDocumentProxy : DispatchProxy {
 			public ModuleDef Module { get; set; } = null!;
 			public IDsBundleDocument BundleDocument { get; set; } = null!;
+			public IDsBundleEntryDocument ModuleDocument { get; set; } = null!;
 
 			protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) {
 				if (targetMethod?.Name == "get_ModuleDef")
@@ -246,6 +254,12 @@ namespace dnSpy.Bundles.IntegrationTests {
 					return BundleDocument;
 				if (targetMethod?.Name == "get_BundleRelativePath")
 					return "ready-to-run.dll";
+				if (targetMethod?.Name == "get_WorkspaceError")
+					return ModuleDocument.WorkspaceError;
+				if (targetMethod?.Name == "RecordWorkspaceError") {
+					ModuleDocument.RecordWorkspaceError((Exception)args![0]!);
+					return null;
+				}
 				return targetMethod?.ReturnType is not null && targetMethod.ReturnType.IsValueType
 					? Activator.CreateInstance(targetMethod.ReturnType) : null;
 			}

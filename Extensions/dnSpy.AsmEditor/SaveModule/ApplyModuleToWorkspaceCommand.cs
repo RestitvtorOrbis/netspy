@@ -157,17 +157,20 @@ namespace dnSpy.AsmEditor.SaveModule {
 			// Build and validate every output before touching the workspace. The bundle contract then
 			// installs all candidates in one atomic workspace transaction.
 			var serialized = new List<SerializedReplacement>(uniqueDocuments.Count);
+			IDsBundleEntryDocument? failingDocument = null;
 			try {
 				foreach (IDsBundleEntryDocument document in uniqueDocuments) {
 					if (document.IsReadyToRun) {
-						messageBoxService.Show(
-							$"The ReadyToRun bundle entry '{document.BundleRelativePath}' cannot be applied to the bundle workspace. ReadyToRun rewriting is not supported.",
-							MsgBoxButton.OK, ownerWindow);
-						return false;
+						failingDocument = document;
+						var error = new NotSupportedException(
+							$"The ReadyToRun bundle entry '{document.BundleRelativePath}' cannot be applied to the bundle workspace. ReadyToRun rewriting is not supported.");
+						document.RecordWorkspaceError(error);
+						throw error;
 					}
 				}
 
 				foreach (IDsBundleEntryDocument document in uniqueDocuments) {
+					failingDocument = document;
 					var options = new SaveModuleOptionsVM(document);
 					if (StrongNameSaveGuard.IsRequired(options.Module) &&
 						(removeStrongName is not null || reSignKeyFileName is not null)) {
@@ -207,6 +210,8 @@ namespace dnSpy.AsmEditor.SaveModule {
 				bundleDocument.SetWorkspaceReplacements(candidates);
 			}
 			catch (Exception ex) {
+				if (failingDocument is not null && !ReferenceEquals(failingDocument.WorkspaceError, ex))
+					failingDocument.RecordWorkspaceError(ex);
 				// The batch contract validates and stages every candidate before swapping workspace state.
 				// Any failure is reported without claiming success.
 				messageBoxService.Show(ex,

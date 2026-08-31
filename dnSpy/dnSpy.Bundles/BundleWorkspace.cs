@@ -14,6 +14,9 @@ namespace dnSpy.Bundles {
 		readonly object gate = new object();
 		Dictionary<BundleEntry, Replacement> replacements =
 			new Dictionary<BundleEntry, Replacement>(BundleEntryReferenceComparer.Instance);
+		Dictionary<BundleEntry, Exception> errors =
+			new Dictionary<BundleEntry, Exception>(BundleEntryReferenceComparer.Instance);
+		HashSet<BundleEntry> reverted = new HashSet<BundleEntry>(BundleEntryReferenceComparer.Instance);
 		int disposed;
 
 		sealed class Replacement {
@@ -56,6 +59,55 @@ namespace dnSpy.Bundles {
 			lock (gate) {
 				EnsureEntry(entry);
 				return replacements.ContainsKey(entry);
+			}
+		}
+
+		/// <summary>Returns whether an entry currently has an operation error.</summary>
+		public bool HasError(BundleEntry entry) {
+			lock (gate) {
+				EnsureEntry(entry);
+				return errors.ContainsKey(entry);
+			}
+		}
+
+		/// <summary>Gets the last operation error for an entry, if any.</summary>
+		public Exception? GetError(BundleEntry entry) {
+			lock (gate) {
+				EnsureEntry(entry);
+				return errors.TryGetValue(entry, out Exception? error) ? error : null;
+			}
+		}
+
+		/// <summary>Gets the current logical state of an entry.</summary>
+		public BundleWorkspaceEntryState GetEntryState(BundleEntry entry) {
+			lock (gate) {
+				EnsureEntry(entry);
+				if (errors.ContainsKey(entry))
+					return BundleWorkspaceEntryState.Error;
+				if (replacements.ContainsKey(entry))
+					return BundleWorkspaceEntryState.Modified;
+				return reverted.Contains(entry)
+					? BundleWorkspaceEntryState.Reverted : BundleWorkspaceEntryState.Unchanged;
+			}
+		}
+
+		/// <summary>True when at least one entry has a visible operation error.</summary>
+		public bool HasErrors {
+			get {
+				lock (gate) {
+					EnsureNotDisposed();
+					return errors.Count != 0;
+				}
+			}
+		}
+
+		/// <summary>True when an entry was restored by a revert operation.</summary>
+		public bool HasRevertedEntries {
+			get {
+				lock (gate) {
+					EnsureNotDisposed();
+					return reverted.Count != 0;
+				}
 			}
 		}
 
@@ -165,6 +217,10 @@ namespace dnSpy.Bundles {
 				foreach (KeyValuePair<BundleEntry, Replacement> candidate in pendingEntries)
 					updated[candidate.Key] = candidate.Value;
 				replacements = updated;
+				foreach (KeyValuePair<BundleEntry, Replacement> candidate in pendingEntries)
+					errors.Remove(candidate.Key);
+				foreach (KeyValuePair<BundleEntry, Replacement> candidate in pendingEntries)
+					reverted.Remove(candidate.Key);
 				changes = pendingEntries.Select(a => new BundleWorkspaceChangedEventArgs(a.Key,
 					BundleWorkspaceChangeKind.ReplacementSet, a.Value.Info)).ToArray();
 			}
@@ -177,10 +233,16 @@ namespace dnSpy.Bundles {
 			BundleWorkspaceChangedEventArgs? change = null;
 			lock (gate) {
 				EnsureEntry(entry);
-				if (replacements.TryGetValue(entry, out Replacement? replacement)) {
+				Replacement? replacement = null;
+				Exception? error = null;
+				bool hasReplacement = replacements.TryGetValue(entry, out replacement);
+				bool hasError = errors.TryGetValue(entry, out error);
+				if (hasReplacement || hasError) {
 					replacements.Remove(entry);
+					errors.Remove(entry);
+					reverted.Add(entry);
 					change = new BundleWorkspaceChangedEventArgs(entry,
-						BundleWorkspaceChangeKind.Reverted, replacement.Info);
+						BundleWorkspaceChangeKind.Reverted, replacement?.Info, error);
 				}
 			}
 			if (change is null)
@@ -197,9 +259,18 @@ namespace dnSpy.Bundles {
 				foreach (BundleEntry entry in Bundle.Entries) {
 					if (replacements.TryGetValue(entry, out Replacement? replacement)) {
 						replacements.Remove(entry);
+						errors.Remove(entry);
+						reverted.Add(entry);
 						(changes ??= new List<BundleWorkspaceChangedEventArgs>()).Add(
 							new BundleWorkspaceChangedEventArgs(entry,
 								BundleWorkspaceChangeKind.Reverted, replacement.Info));
+					}
+					else if (errors.TryGetValue(entry, out Exception? error)) {
+						errors.Remove(entry);
+						reverted.Add(entry);
+						(changes ??= new List<BundleWorkspaceChangedEventArgs>()).Add(
+							new BundleWorkspaceChangedEventArgs(entry,
+								BundleWorkspaceChangeKind.Reverted, null, error));
 					}
 				}
 			}
@@ -208,6 +279,27 @@ namespace dnSpy.Bundles {
 			foreach (BundleWorkspaceChangedEventArgs change in changes)
 				Changed?.Invoke(this, change);
 		}
+
+		/// <summary>
+		/// Records an operation failure without changing the current replacement or original bytes.
+		/// A later successful replacement or revert clears the error.
+		/// </summary>
+		public void RecordError(BundleEntry entry, Exception error) {
+			if (error is null)
+				throw new ArgumentNullException(nameof(error));
+			BundleWorkspaceChangedEventArgs change;
+			lock (gate) {
+				EnsureEntry(entry);
+				errors[entry] = error;
+				reverted.Remove(entry);
+				change = new BundleWorkspaceChangedEventArgs(entry,
+					BundleWorkspaceChangeKind.Error, GetReplacementInfoCore(entry), error);
+			}
+			Changed?.Invoke(this, change);
+		}
+
+		BundleReplacementInfo? GetReplacementInfoCore(BundleEntry entry) =>
+			replacements.TryGetValue(entry, out Replacement? replacement) ? replacement.Info : null;
 
 		void EnsureEntry(BundleEntry entry) {
 			EnsureNotDisposed();
@@ -230,6 +322,9 @@ namespace dnSpy.Bundles {
 					return;
 				disposed = 1;
 				replacements.Clear();
+				errors.Clear();
+				reverted.Clear();
+				Changed = null;
 				Bundle.Dispose();
 			}
 		}

@@ -30,6 +30,12 @@ namespace dnSpy.Bundles.Extension {
 		/// <summary>Whether the entry is a managed assembly.</summary>
 		public bool IsManaged => Entry.FileType == BundleFileType.Assembly;
 
+		/// <summary>Current logical state tracked by the owning workspace.</summary>
+		public BundleWorkspaceEntryState WorkspaceState => BundleDocument.Workspace.GetEntryState(Entry);
+
+		/// <summary>Last workspace operation error, if any.</summary>
+		public Exception? WorkspaceError => BundleDocument.Workspace.GetError(Entry);
+
 		/// <summary>
 		/// Gets the activated module, if this entry has already been selected. This property never
 		/// activates an entry and therefore remains null while the bundle tree is being rendered.

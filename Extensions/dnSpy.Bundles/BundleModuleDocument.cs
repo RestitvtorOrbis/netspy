@@ -46,6 +46,12 @@ namespace dnSpy.Bundles.Extension {
 		/// <inheritdoc/>
 		public bool HasWorkspaceReplacement => BundleDocument.Workspace.HasReplacement(Entry);
 
+		/// <summary>Current workspace state, including a failed operation.</summary>
+		public BundleWorkspaceEntryState WorkspaceState => BundleDocument.Workspace.GetEntryState(Entry);
+
+		/// <inheritdoc/>
+		public Exception? WorkspaceError => BundleDocument.Workspace.GetError(Entry);
+
 		/// <summary>Metadata for the current workspace replacement, if one is installed.</summary>
 		public BundleReplacementInfo? WorkspaceReplacementInfo =>
 			BundleDocument.Workspace.GetReplacementInfo(Entry);
@@ -81,7 +87,17 @@ namespace dnSpy.Bundles.Extension {
 		public void SetWorkspaceReplacement(byte[] bytes) {
 			// Validate completely before touching the workspace. A replacement is deliberately
 			// reopened with dnlib at this boundary so malformed output cannot become dirty state.
-			using ModuleDefMD replacement = ValidateWorkspaceReplacement(bytes);
+			try {
+				using ModuleDefMD replacement = ValidateWorkspaceReplacement(bytes);
+				SetWorkspaceReplacementCore(bytes);
+			}
+			catch (Exception ex) {
+				BundleDocument.Workspace.RecordError(Entry, ex);
+				throw;
+			}
+		}
+
+		void SetWorkspaceReplacementCore(byte[] bytes) {
 			if (IsStrongNameRequired(ModuleDef!))
 				throw new InvalidOperationException(
 					"An explicit strong-name disposition is required before replacing a signed bundle entry.");
@@ -96,8 +112,14 @@ namespace dnSpy.Bundles.Extension {
 		internal BundleWorkspaceReplacement CreateWorkspaceReplacement(byte[] bytes, BundleReplacementInfo info) {
 			if (info is null)
 				throw new ArgumentNullException(nameof(info));
-			using ModuleDefMD replacement = ValidateWorkspaceReplacement(bytes);
-			ValidateStrongNameDisposition(ModuleDef!, replacement, info);
+			try {
+				using ModuleDefMD replacement = ValidateWorkspaceReplacement(bytes);
+				ValidateStrongNameDisposition(ModuleDef!, replacement, info);
+			}
+			catch (Exception ex) {
+				BundleDocument.Workspace.RecordError(Entry, ex);
+				throw;
+			}
 			return new BundleWorkspaceReplacement(Entry, bytes, info);
 		}
 
@@ -113,6 +135,10 @@ namespace dnSpy.Bundles.Extension {
 
 		/// <inheritdoc/>
 		public void RevertWorkspaceReplacement() => BundleDocument.Workspace.Revert(Entry);
+
+		/// <inheritdoc/>
+		public void RecordWorkspaceError(Exception error) =>
+			BundleDocument.Workspace.RecordError(Entry, error);
 
 		static bool IsStrongNameRequired(ModuleDef module) {
 			var publicKey = module.Assembly?.PublicKey;
