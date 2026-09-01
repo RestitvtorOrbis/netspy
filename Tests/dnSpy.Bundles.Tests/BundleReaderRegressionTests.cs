@@ -35,6 +35,25 @@ namespace dnSpy.Bundles.Tests {
 			Assert.Throws<InvalidOperationException>(() => workspace.OpenOriginalRead(entry));
 		}
 
+		[Fact]
+		public void EligibilityInspectionDoesNotDisposeOrMutateReaderState() {
+			ModernBundleFixture fixture = ModernFixtureLocator.FindRequired().Single(item =>
+				item.Variant == "fdd-uncompressed");
+			BundleOpenResult result = new BundleReader().Open(fixture.BundlePath);
+			Assert.Equal(BundleOpenStatus.Success, result.Status);
+			using var workspace = new BundleWorkspace(result.Bundle!);
+			BundleEntry entry = Assert.Single(workspace.Bundle.Entries,
+				candidate => candidate.RelativePath == "SingleFile.App.dll");
+			byte[] before = entry.ReadAllBytes(entry.Size);
+
+			WindowsBundleEligibilityResult eligibility =
+				new WindowsBundleEligibilityInspector().Inspect(workspace);
+
+			Assert.Equal(WindowsBundleEligibilityStatus.Eligible, eligibility.Status);
+			Assert.Equal(before, entry.ReadAllBytes(entry.Size));
+			Assert.False(workspace.HasChanges);
+		}
+
 		static byte[] Read(Stream stream) {
 			using (stream) {
 				using var output = new MemoryStream();
