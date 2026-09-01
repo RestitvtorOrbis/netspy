@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net48;net10.0</TargetFrameworks>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>preview</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+    <AutomaticallyUseReferenceAssemblyPackages>false</AutomaticallyUseReferenceAssemblyPackages>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <PackageLockFilePath>packages.lock.json</PackageLockFilePath>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="AppHost/BinaryUtils.cs" />
+    <Compile Include="AppHost/PEUtils.cs" />
+    <Compile Include="AppHost/PlaceHolderNotFoundInAppHostException.cs" />
+    <Compile Include="AppHost/RetryUtil.cs" />
+    <Compile Include="Bundle/BundleOptions.cs" />
+    <Compile Include="Bundle/Bundler.cs" />
+    <Compile Include="Bundle/FileEntry.cs" />
+    <Compile Include="Bundle/FileSpec.cs" />
+    <Compile Include="Bundle/FileType.cs" />
+    <Compile Include="Bundle/Manifest.cs" />
+    <Compile Include="Bundle/TargetInfo.cs" />
+    <Compile Include="Bundle/Trace.cs" />
+    <Compile Include="HostModelUtils.cs" />
+    <Compile Include="PEOffsets.cs" />
+    <Compile Include="Utils/Base64Url.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <PackageReference Include="System.Memory" Version="4.6.3" />
+    <PackageReference Include="System.Reflection.Metadata" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ExpectedHostModelCompile Include="AppHost/BinaryUtils.cs;AppHost/PEUtils.cs;AppHost/PlaceHolderNotFoundInAppHostException.cs;AppHost/RetryUtil.cs;Bundle/BundleOptions.cs;Bundle/Bundler.cs;Bundle/FileEntry.cs;Bundle/FileSpec.cs;Bundle/FileType.cs;Bundle/Manifest.cs;Bundle/TargetInfo.cs;Bundle/Trace.cs;HostModelUtils.cs;PEOffsets.cs;Utils/Base64Url.cs" />
+  </ItemGroup>
+
+  <Target Name="AssertHostModelCompileItems" BeforeTargets="CoreCompile">
+    <ItemGroup>
+      <UnexpectedHostModelCompile Include="@(Compile)" Exclude="@(ExpectedHostModelCompile)" />
+      <MissingHostModelCompile Include="@(ExpectedHostModelCompile)" Exclude="@(Compile)" />
+    </ItemGroup>
+    <PropertyGroup>
+      <HostModelCompileCount>@(Compile->Count())</HostModelCompileCount>
+    </PropertyGroup>
+    <Error Condition="'$(HostModelCompileCount)' != '15'" Text="HostModel compile closure must contain exactly 15 items; found $(HostModelCompileCount)." />
+    <Error Condition="'@(UnexpectedHostModelCompile)' != ''" Text="Unexpected HostModel compile item(s): @(UnexpectedHostModelCompile)" />
+    <Error Condition="'@(MissingHostModelCompile)' != ''" Text="Missing HostModel compile item(s): @(MissingHostModelCompile)" />
+  </Target>
+
+</Project>

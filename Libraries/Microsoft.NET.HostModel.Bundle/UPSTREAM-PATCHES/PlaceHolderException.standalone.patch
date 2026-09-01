@@ -1,0 +1,11 @@
+--- a/src/installer/managed/Microsoft.NET.HostModel/AppHost/PlaceHolderNotFoundInAppHostException.cs
++++ b/src/installer/managed/Microsoft.NET.HostModel/AppHost/PlaceHolderNotFoundInAppHostException.cs
+@@ -9,7 +9,7 @@
+     /// Unable to use input file as a valid application host executable, as it does not contain
+     /// the expected placeholder byte sequence.
+     /// </summary>
+-    public class PlaceHolderNotFoundInAppHostException : AppHostUpdateException
++    public class PlaceHolderNotFoundInAppHostException : Exception
+     {
+         public byte[] MissingPattern { get; }
+         public PlaceHolderNotFoundInAppHostException(byte[] pattern)

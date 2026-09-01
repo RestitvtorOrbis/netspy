@@ -1,0 +1,106 @@
+--- a/src/installer/managed/Microsoft.NET.HostModel/Bundle/Bundler.cs
++++ b/src/installer/managed/Microsoft.NET.HostModel/Bundle/Bundler.cs
+@@ -5,7 +5,6 @@
+ 
+ using System;
+ using System.Collections.Generic;
+-using System.Collections.Immutable;
+ using System.Diagnostics;
+ using System.IO;
+ using System.IO.Compression;
+@@ -15,7 +14,6 @@
+ using System.Runtime.InteropServices;
+ using System.Text;
+ using Microsoft.NET.HostModel.AppHost;
+-using Microsoft.NET.HostModel.MachO;
+ 
+ namespace Microsoft.NET.HostModel.Bundle
+ {
+@@ -38,7 +36,6 @@
+         private readonly Trace _tracer;
+         private readonly TargetInfo _target;
+         private readonly BundleOptions _options;
+-        private readonly bool _macosCodesign;
+ 
+         public Bundler(string hostName,
+                        string outputDir,
+@@ -72,7 +69,8 @@
+ 
+             BundleManifest = new Manifest(_target.BundleMajorVersion, netcoreapp3CompatMode: options.HasFlag(BundleOptions.BundleAllContent));
+             _options = _target.DefaultOptions | options;
+-            _macosCodesign = macosCodesign;
++            if (macosCodesign)
++                throw new ArgumentException("macOS code signing is unavailable in the Windows-only bundle subset.", nameof(macosCodesign));
+         }
+ 
+         private bool ShouldCompress(FileType type)
+@@ -317,9 +315,6 @@
+             var hostLength = HostModelUtils.GetFileLength(hostSource);
+             var bundleManifestLength = Manifest.GetManifestLength(BundleManifest.BundleMajorVersion, relativePathToSpec.Select(x => x.Spec.BundleRelativePath));
+             long bundleTotalSize = hostLength + bundledFilesSize + bundleManifestLength;
+-            if (_target.IsOSX && _macosCodesign)
+-                bundleTotalSize += MachObjectFile.GetSignatureSizeEstimate((uint)bundleTotalSize, _hostName);
+-
+             using (MemoryMappedFile bundleMap = MemoryMappedFile.CreateNew(null, bundleTotalSize, MemoryMappedFileAccess.ReadWrite, MemoryMappedFileOptions.None, HandleInheritability.None))
+             {
+                 long endOfHost;
+@@ -334,19 +329,6 @@
+                     endOfHost = bundleStream.Position;
+ 
+                     Debug.Assert(endOfHost == hostLength, $"Host file size on disk does not match bytes written to the bundle. Expected {hostLength}, but got {endOfHost}. This may indicate that the host file is not a valid native binary or that it is not a single-file apphost.");
+-                    MachObjectFile? machFile = null;
+-                    EmbeddedSignatureBlob? signatureBlob = null;
+-                    IMachOFileAccess machFileReader = null!;
+-                    if (_target.IsOSX)
+-                    {
+-                        machFileReader = new StreamBasedMachOFile(bundleStream);
+-                        machFile = MachObjectFile.Create(machFileReader);
+-                        signatureBlob = machFile.EmbeddedSignatureBlob;
+-                        if (machFile.RemoveCodeSignatureIfPresent(machFileReader, out long? newEnd))
+-                        {
+-                            endOfHost = newEnd!.Value;
+-                        }
+-                    }
+                     bundleStream.Position = endOfHost;
+                     foreach (var kvp in relativePathToSpec)
+                     {
+@@ -377,39 +359,12 @@
+                                                 BundleHeaderPlaceholder,
+                                                 BitConverter.GetBytes(headerOffset),
+                                                 pad0s: false);
+-                    if (_target.IsOSX && machFile is not null)
+-                    {
+-                        Debug.Assert(machFileReader is not null, "MachO file reader should not be null if the target is macOS.");
+-                        if (!machFile.TryAdjustHeadersForBundle(endOfBundle, machFileReader!))
+-                        {
+-                            throw new InvalidOperationException("The single-file bundle was unable to be created. This is likely because the bundled content is too large.");
+-                        }
+-                        if (_macosCodesign)
+-                        {
+-                            endOfBundle = (ulong)machFile.AdHocSignFile(machFileReader!, _hostName);
+-                        }
+-                    }
+-
+-                    // MacOS keeps a cache of file signatures, so we must create a new inode to ensure the file signature is properly updated.
+-                    if (_macosCodesign && File.Exists(bundlePath))
+-                    {
+-                        _tracer.Log($"Removing existing bundle file to clear signature cache: {bundlePath}");
+-                        File.Delete(bundlePath);
+-                    }
+                     using (FileStream bundleOutputStream = File.Open(bundlePath, FileMode.Create, FileAccess.Write, FileShare.None))
+                     {
+                         BinaryUtils.WriteToStream(accessor, bundleOutputStream, (long)endOfBundle);
+                     }
+                 }
+             }
+-            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+-            {
+-                // chmod +755
+-                File.SetUnixFileMode(bundlePath,
+-                     UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+-                     UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+-                     UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+-            }
+             return bundlePath;
+         }
+ 
