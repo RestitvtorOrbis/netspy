@@ -328,7 +328,7 @@ namespace dnSpy.Bundles.IntegrationTests {
 			return output.Text;
 		}
 
-		static BundleDsDocument CreateBundleDocument(out BundleEntry firstEntry) {
+		internal static BundleDsDocument CreateBundleDocument(out BundleEntry firstEntry) {
 			string filename = FindCompressedFixture();
 			BundleOpenResult result = new BundleReader().Open(filename);
 			Assert.Equal(BundleOpenStatus.Success, result.Status);
@@ -338,7 +338,7 @@ namespace dnSpy.Bundles.IntegrationTests {
 			return document;
 		}
 
-		static string FindCompressedFixture() {
+		internal static string FindCompressedFixture() {
 			string? configured = Environment.GetEnvironmentVariable("DNSPY_BUNDLE_FIXTURES");
 			var roots = new List<string>();
 			if (!string.IsNullOrWhiteSpace(configured))

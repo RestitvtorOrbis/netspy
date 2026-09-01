@@ -46,13 +46,17 @@ namespace dnSpy.Documents.Tabs {
 		readonly DocumentListService documentListService;
 		readonly DocumentTabService documentTabService;
 		readonly DocumentTabSerializer documentTabSerializer;
+		readonly IDsDocumentService documentService;
+		readonly IDsDocumentCloseGuardService closeGuardService;
 		readonly Lazy<IDocumentListListener, IDocumentListListenerMetadata>[] documentListListeners;
 
 		[ImportingConstructor]
-		DocumentListLoader(IAppWindow appWindow, DocumentListService documentListService, DocumentTabService documentTabService, DocumentTabSerializer documentTabSerializer, [ImportMany] IEnumerable<Lazy<IDocumentListListener, IDocumentListListenerMetadata>> documentListListeners) {
+		DocumentListLoader(IAppWindow appWindow, DocumentListService documentListService, DocumentTabService documentTabService, DocumentTabSerializer documentTabSerializer, IDsDocumentService documentService, IDsDocumentCloseGuardService closeGuardService, [ImportMany] IEnumerable<Lazy<IDocumentListListener, IDocumentListListenerMetadata>> documentListListeners) {
 			this.documentListService = documentListService;
 			this.documentTabService = documentTabService;
 			this.documentTabSerializer = documentTabSerializer;
+			this.documentService = documentService;
+			this.closeGuardService = closeGuardService;
 			this.documentListListeners = documentListListeners.OrderBy(a => a.Metadata.Order).ToArray();
 			appWindow.MainWindowClosed += AppWindow_MainWindowClosed;
 		}
@@ -122,6 +126,13 @@ namespace dnSpy.Documents.Tabs {
 				listener.Value.AfterLoad(isReload);
 		}
 
+		void ClearDocuments(DsDocumentCloseReason reason) {
+			if (documentService is IDsDocumentServiceCloseGuardInternal service)
+				service.Clear(reason);
+			else
+				documentService.Clear();
+		}
+
 		public bool CanLoad => !disableLoadAndReload && documentListListeners.All(a => a.Value.CanLoad);
 
 		public bool Load(DocumentList documentList, IDsDocumentLoader? documentLoader) {
@@ -132,18 +143,20 @@ namespace dnSpy.Documents.Tabs {
 				return false;
 			if (!CheckCanLoad(isReload))
 				return false;
-			if (documentList != documentListService.SelectedDocumentList)
-				SaveCurrentDocumentsToList();
+			IDsDocument[] currentDocuments = documentService.GetDocuments();
+			return closeGuardService.TryExecute(currentDocuments, DsDocumentCloseReason.LoadList, () => {
+				if (documentList != documentListService.SelectedDocumentList)
+					SaveCurrentDocumentsToList();
 
-			NotifyBeforeLoad(isReload);
-			using (DisableSaveToList()) {
-				documentTabService.CloseAll();
-				documentTabService.DocumentTreeView.DocumentService.Clear();
-				documentLoader.Load(documentList.Documents.Select(a => new DocumentToLoad(a)));
-			}
-			NotifyAfterLoad(isReload);
-
-			return true;
+				NotifyBeforeLoad(isReload);
+				using (DisableSaveToList()) {
+					documentTabService.CloseAll();
+					ClearDocuments(DsDocumentCloseReason.LoadList);
+					documentLoader.Load(documentList.Documents.Select(a => new DocumentToLoad(a)));
+				}
+				NotifyAfterLoad(isReload);
+				return true;
+			});
 		}
 
 		public bool CanReload => !disableLoadAndReload && documentListListeners.All(a => a.Value.CanReload);
@@ -156,36 +169,39 @@ namespace dnSpy.Documents.Tabs {
 				return false;
 			if (!CheckCanLoad(isReload))
 				return false;
-			SaveCurrentDocumentsToList();
+			IDsDocument[] currentDocuments = documentService.GetDocuments();
+			return closeGuardService.TryExecute(currentDocuments, DsDocumentCloseReason.ReloadList, () => {
+				SaveCurrentDocumentsToList();
 
-			NotifyBeforeLoad(isReload);
-			var tgws = documentTabSerializer.SaveTabs();
-			using (DisableSaveToList())
-			using (documentTabService.OnReloadAll()) {
-				documentTabService.CloseAll();
-				documentTabService.DocumentTreeView.DocumentService.Clear();
-				var documents = documentListService.SelectedDocumentList.Documents.Select(a => new DocumentToLoad(a)).ToList();
-				foreach (var tgw in tgws) {
-					foreach (var g in tgw.TabGroups) {
-						foreach (var t in g.Tabs) {
-							foreach (var f in t.AutoLoadedDocuments)
-								documents.Add(new DocumentToLoad(f, true));
+				NotifyBeforeLoad(isReload);
+				var tgws = documentTabSerializer.SaveTabs();
+				using (DisableSaveToList())
+				using (documentTabService.OnReloadAll()) {
+					documentTabService.CloseAll();
+					ClearDocuments(DsDocumentCloseReason.ReloadList);
+					var documents = documentListService.SelectedDocumentList.Documents.Select(a => new DocumentToLoad(a)).ToList();
+					foreach (var tgw in tgws) {
+						foreach (var g in tgw.TabGroups) {
+							foreach (var t in g.Tabs) {
+								foreach (var f in t.AutoLoadedDocuments)
+									documents.Add(new DocumentToLoad(f, true));
+							}
 						}
 					}
+					documentLoader.Load(documents);
 				}
-				documentLoader.Load(documents);
-			}
-			NotifyAfterLoad(isReload);
+				NotifyAfterLoad(isReload);
 
-			// The documents in the TV is loaded with a delay so make sure we delay before restoring
-			// or the code that tries to find the nodes might fail to find them.
-			disableLoadAndReload = true;
-			Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => {
-				foreach (var o in documentTabSerializer.Restore(tgws)) {
-				}
-				disableLoadAndReload = false;
-			}));
-			return true;
+				// The documents in the TV is loaded with a delay so make sure we delay before restoring
+				// or the code that tries to find the nodes might fail to find them.
+				disableLoadAndReload = true;
+				Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => {
+					foreach (var o in documentTabSerializer.Restore(tgws)) {
+					}
+					disableLoadAndReload = false;
+				}));
+				return true;
+			});
 		}
 		bool disableLoadAndReload;
 
@@ -197,11 +213,14 @@ namespace dnSpy.Documents.Tabs {
 				return;
 			if (!CheckCanLoad(isReload))
 				return;
-
-			NotifyBeforeLoad(isReload);
-			documentTabService.CloseAll();
-			documentTabService.DocumentTreeView.DocumentService.Clear();
-			NotifyAfterLoad(isReload);
+			IDsDocument[] currentDocuments = documentService.GetDocuments();
+			closeGuardService.TryExecute(currentDocuments, DsDocumentCloseReason.Remove, () => {
+				NotifyBeforeLoad(isReload);
+				documentTabService.CloseAll();
+				ClearDocuments(DsDocumentCloseReason.Remove);
+				NotifyAfterLoad(isReload);
+				return true;
+			});
 		}
 	}
 }

@@ -30,8 +30,19 @@ using dnSpy.Contracts.DnSpy.Metadata;
 using dnSpy.Contracts.Documents;
 
 namespace dnSpy.Documents {
+	interface IDsDocumentServiceCloseGuardInternal {
+		void Clear(DsDocumentCloseReason reason);
+	}
+
 	[Export(typeof(IDsDocumentService))]
-	sealed class DsDocumentService : IDsDocumentService {
+	sealed class DsDocumentService : IDsDocumentService, IDsDocumentServiceCloseGuardInternal {
+		sealed class NoOpCloseGuardService : IDsDocumentCloseGuardService {
+			public bool TryExecute(IReadOnlyList<IDsDocument> documents,
+				DsDocumentCloseReason reason, Func<bool> authorizedAction) => authorizedAction();
+		}
+		static readonly Lazy<IDsDocumentCloseGuardService> noOpCloseGuardService =
+			new Lazy<IDsDocumentCloseGuardService>(() => new NoOpCloseGuardService());
+
 		// PERF: Most of the time we only read from the assembly list so use a ReaderWriterLockSlim instead of a normal lock
 		readonly ReaderWriterLockSlim rwLock;
 		readonly List<DocumentInfo> documents;
@@ -39,6 +50,13 @@ namespace dnSpy.Documents {
 		HashSet<IDsDocument> tempCache;
 		readonly IDsDocumentProvider[] documentProviders;
 		readonly AssemblyResolver assemblyResolver;
+		readonly Lazy<IDsDocumentCloseGuardService> closeGuardService;
+
+		sealed class DocumentReferenceComparer : IEqualityComparer<IDsDocument> {
+			public static readonly DocumentReferenceComparer Instance = new DocumentReferenceComparer();
+			public bool Equals(IDsDocument? x, IDsDocument? y) => ReferenceEquals(x, y);
+			public int GetHashCode(IDsDocument obj) => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj);
+		}
 
 		// PERF: Must be a struct; class is 9% slower (decompile mscorlib+dnSpy = 83 files)
 		readonly struct DocumentInfo {
@@ -106,13 +124,14 @@ namespace dnSpy.Documents {
 		public IDsDocumentServiceSettings Settings { get; }
 
 		[ImportingConstructor]
-		public DsDocumentService(IDsDocumentServiceSettings documentServiceSettings, [ImportMany] IDsDocumentProvider[] documentProviders, [ImportMany] Lazy<IRuntimeAssemblyResolver, IRuntimeAssemblyResolverMetadata>[] runtimeAsmResolvers) {
+		public DsDocumentService(IDsDocumentServiceSettings documentServiceSettings, [ImportMany] IDsDocumentProvider[] documentProviders, [ImportMany] Lazy<IRuntimeAssemblyResolver, IRuntimeAssemblyResolverMetadata>[] runtimeAsmResolvers, [Import(AllowDefault = true)] Lazy<IDsDocumentCloseGuardService>? closeGuardService) {
 			rwLock = new ReaderWriterLockSlim(LockRecursionPolicy.NoRecursion);
 			documents = new List<DocumentInfo>();
 			tempCacheLock = new ReaderWriterLockSlim(LockRecursionPolicy.NoRecursion);
 			tempCache = new HashSet<IDsDocument>(TempCacheDocumentComparer.Instance);
 			assemblyResolver = new AssemblyResolver(this, runtimeAsmResolvers.OrderBy(a => a.Metadata.Order).ToArray());
 			this.documentProviders = documentProviders.OrderBy(a => a.Order).ToArray();
+			this.closeGuardService = closeGuardService ?? noOpCloseGuardService;
 			Settings = documentServiceSettings;
 		}
 
@@ -139,18 +158,48 @@ namespace dnSpy.Documents {
 			}
 		}
 
-		public void Clear() {
+		public void Clear() => Clear(DsDocumentCloseReason.Remove);
+
+		void IDsDocumentServiceCloseGuardInternal.Clear(DsDocumentCloseReason reason) => Clear(reason);
+
+		void Clear(DsDocumentCloseReason reason) {
 			IDsDocument[] oldDocuments;
-			rwLock.EnterWriteLock();
+			rwLock.EnterReadLock();
 			try {
 				oldDocuments = documents.Select(a => a.Document).ToArray();
-				documents.Clear();
+			}
+			finally {
+				rwLock.ExitReadLock();
+			}
+			if (oldDocuments.Length == 0)
+				return;
+			if (closeGuardService.Value is IDsDocumentCloseGuardServiceInternal service)
+				service.TryExecuteClear(oldDocuments, reason, () => ClearCore(oldDocuments));
+			else
+				closeGuardService.Value.TryExecute(oldDocuments, reason,
+					() => ClearCore(oldDocuments));
+		}
+
+		bool ClearCore(IReadOnlyList<IDsDocument> expectedDocuments) {
+			var expected = new HashSet<IDsDocument>(expectedDocuments, DocumentReferenceComparer.Instance);
+			var removedDocuments = new List<IDsDocument>();
+			rwLock.EnterWriteLock();
+			try {
+				for (int i = documents.Count - 1; i >= 0; i--) {
+					if (!expected.Contains(documents[i].Document))
+						continue;
+					removedDocuments.Add(documents[i].Document);
+					documents.RemoveAt(i);
+				}
 			}
 			finally {
 				rwLock.ExitWriteLock();
 			}
-			if (oldDocuments.Length != 0)
-				CallCollectionChanged(NotifyDocumentCollectionChangedEventArgs.CreateClear(oldDocuments, null));
+			if (removedDocuments.Count != 0) {
+				removedDocuments.Reverse();
+				CallCollectionChanged(NotifyDocumentCollectionChangedEventArgs.CreateClear(removedDocuments.ToArray(), null));
+			}
+			return true;
 		}
 
 		static AssemblyNameComparerFlags ToAssemblyNameComparerFlags(FindAssemblyOptions options) {
@@ -500,18 +549,36 @@ namespace dnSpy.Documents {
 			if (key is null)
 				return;
 
-			IDsDocument? removedDocument;
+			IDsDocument? document;
+			rwLock.EnterReadLock();
+			try {
+				document = Find_NoLock(key).Document;
+			}
+			finally {
+				rwLock.ExitReadLock();
+			}
+			if (document is null)
+				return;
+
+			closeGuardService.Value.TryExecute(new[] { document }, DsDocumentCloseReason.Remove,
+				() => RemoveCore(key, document));
+		}
+
+		bool RemoveCore(IDsDocumentNameKey key, IDsDocument expectedDocument) {
+			IDsDocument? removedDocument = null;
 			rwLock.EnterWriteLock();
 			try {
-				removedDocument = Remove_NoLock(key);
+				var info = Find_NoLock(key);
+				if (ReferenceEquals(info.Document, expectedDocument))
+					removedDocument = Remove_NoLock(key);
 			}
 			finally {
 				rwLock.ExitWriteLock();
 			}
-			Debug2.Assert(removedDocument is not null);
-
-			if (removedDocument is not null)
-				CallCollectionChanged(NotifyDocumentCollectionChangedEventArgs.CreateRemove(removedDocument, null));
+			if (removedDocument is null)
+				return false;
+			CallCollectionChanged(NotifyDocumentCollectionChangedEventArgs.CreateRemove(removedDocument, null));
+			return true;
 		}
 
 		IDsDocument? Remove_NoLock(IDsDocumentNameKey key) {
@@ -530,25 +597,49 @@ namespace dnSpy.Documents {
 		}
 
 		public void Remove(IEnumerable<IDsDocument> documents) {
+			if (documents is null)
+				throw new ArgumentNullException(nameof(documents));
+			var requested = new List<IDsDocument>();
+			var requestedSet = new HashSet<IDsDocument>(DocumentReferenceComparer.Instance);
+			foreach (IDsDocument? document in documents) {
+				if (document is not null && requestedSet.Add(document))
+					requested.Add(document);
+			}
+			if (requested.Count == 0)
+				return;
+
+			IDsDocument[] snapshot;
+			rwLock.EnterReadLock();
+			try {
+				snapshot = this.documents.Where(a => requestedSet.Contains(a.Document)).Select(a => a.Document).ToArray();
+			}
+			finally {
+				rwLock.ExitReadLock();
+			}
+			if (snapshot.Length == 0)
+				return;
+
+			closeGuardService.Value.TryExecute(snapshot, DsDocumentCloseReason.Remove,
+				() => RemoveManyCore(snapshot));
+		}
+
+		bool RemoveManyCore(IReadOnlyList<IDsDocument> expectedDocuments) {
 			var removedDocuments = new List<IDsDocument>();
+			var expected = new HashSet<IDsDocument>(expectedDocuments, DocumentReferenceComparer.Instance);
 			rwLock.EnterWriteLock();
 			try {
-				var dict = new Dictionary<IDsDocument, int>();
-				int i = 0;
-				foreach (var n in this.documents)
-					dict[n.Document] = i++;
-				var list = new List<(IDsDocument document, int index)>(documents.Select(a => {
-					bool b = dict.TryGetValue(a, out int j);
-					return (a, b ? j : -1);
-				}));
-				list.Sort((a, b) => b.index.CompareTo(a.index));
-				foreach (var t in list) {
-					if (t.index < 0)
+				var indexes = new List<(IDsDocument document, int index)>();
+				for (int i = 0; i < this.documents.Count; i++) {
+					if (expected.Contains(this.documents[i].Document))
+						indexes.Add((this.documents[i].Document, i));
+				}
+				indexes.Sort((a, b) => b.index.CompareTo(a.index));
+				foreach ((IDsDocument document, int index) item in indexes) {
+					if ((uint)item.index >= (uint)this.documents.Count ||
+						!ReferenceEquals(this.documents[item.index].Document, item.document))
 						continue;
-					Debug.Assert((uint)t.index < (uint)this.documents.Count);
-					Debug.Assert(this.documents[t.index].Document == t.document);
-					this.documents.RemoveAt(t.index);
-					removedDocuments.Add(t.document);
+					this.documents.RemoveAt(item.index);
+					removedDocuments.Add(item.document);
 				}
 			}
 			finally {
@@ -557,6 +648,7 @@ namespace dnSpy.Documents {
 
 			if (removedDocuments.Count > 0)
 				CallCollectionChanged(NotifyDocumentCollectionChangedEventArgs.CreateRemove(removedDocuments.ToArray(), null));
+			return true;
 		}
 
 		public void SetDispatcher(Action<Action> action) {

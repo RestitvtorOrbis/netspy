@@ -28,14 +28,16 @@ namespace dnSpy.Documents {
 		readonly IDsDocumentServiceSettings documentServiceSettings;
 		readonly IDsDocumentProvider[] documentProviders;
 		readonly Lazy<IRuntimeAssemblyResolver, IRuntimeAssemblyResolverMetadata>[] runtimeAsmResolvers;
+		readonly Lazy<IDsDocumentCloseGuardService>? closeGuardService;
 
 		[ImportingConstructor]
-		DsDocumentServiceProvider(IDsDocumentServiceSettings documentServiceSettings, [ImportMany] IDsDocumentProvider[] documentProviders, [ImportMany] Lazy<IRuntimeAssemblyResolver, IRuntimeAssemblyResolverMetadata>[] runtimeAsmResolvers) {
+		DsDocumentServiceProvider(IDsDocumentServiceSettings documentServiceSettings, [ImportMany] IDsDocumentProvider[] documentProviders, [ImportMany] Lazy<IRuntimeAssemblyResolver, IRuntimeAssemblyResolverMetadata>[] runtimeAsmResolvers, [Import(AllowDefault = true)] Lazy<IDsDocumentCloseGuardService>? closeGuardService) {
 			this.documentServiceSettings = documentServiceSettings;
 			this.documentProviders = documentProviders;
 			this.runtimeAsmResolvers = runtimeAsmResolvers;
+			this.closeGuardService = closeGuardService;
 		}
 
-		public IDsDocumentService Create() => new DsDocumentService(documentServiceSettings, documentProviders, runtimeAsmResolvers);
+		public IDsDocumentService Create() => new DsDocumentService(documentServiceSettings, documentProviders, runtimeAsmResolvers, closeGuardService);
 	}
 }
