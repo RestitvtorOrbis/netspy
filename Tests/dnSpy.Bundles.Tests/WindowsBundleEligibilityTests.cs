@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
+using Microsoft.NET.HostModel.Bundle;
 using dnSpy.Bundles;
 using Xunit;
 
@@ -75,6 +76,77 @@ namespace dnSpy.Bundles.Tests {
 			Assert.Equal("Bundle entry type 254 cannot be preserved by HostModel.", result.Message);
 			Assert.Equal("SingleFile.App.dll", result.RelativePath);
 			Assert.NotNull(result.EntryIndex);
+		}
+
+		[Fact]
+		public void V1NonzeroRawTypeIsRejectedBeforePayloadInference() {
+			ModernBundleFixture fixture = GetFixture();
+			string sourceRoot = Path.Combine(Path.GetTempPath(),
+				"dnSpy-bnd024-v1-eligibility-" + Guid.NewGuid().ToString("N"));
+			Directory.CreateDirectory(sourceRoot);
+			try {
+				string appHost = Path.Combine(fixture.Root, "obj", "App", "Release", "net10.0", "win-x64", "apphost.exe");
+				var bundler = new Bundler("V1Default.exe", sourceRoot, BundleOptions.BundleSymbolFiles,
+					System.Runtime.InteropServices.OSPlatform.Windows,
+					System.Runtime.InteropServices.Architecture.X64, new Version(3, 1),
+					appAssemblyName: "Compat.App", macosCodesign: false);
+				string source = bundler.GenerateBundle(new[] {
+					new FileSpec(appHost, "V1Default.exe"),
+					new FileSpec(fixture.BuildMainAssemblyPath, "Compat.App.dll"),
+					new FileSpec(appHost, "native-component.dll"),
+					new FileSpec(Path.Combine(fixture.Root, "build", "App", "Release", "net10.0", "win-x64", "SingleFile.App.deps.json"), "Compat.App.deps.json"),
+					new FileSpec(Path.Combine(fixture.Root, "build", "App", "Release", "net10.0", "win-x64", "SingleFile.App.runtimeconfig.json"), "Compat.App.runtimeconfig.json"),
+					new FileSpec(Path.Combine(fixture.Root, "build", "App", "Release", "net10.0", "win-x64", "SingleFile.App.pdb"), "Compat.App.pdb"),
+				});
+				SetManifestType(source, "Compat.App.dll", (byte)BundleFileType.Assembly);
+
+				WindowsBundleEligibilityResult result = inspector.Inspect(source);
+
+				Assert.Equal(WindowsBundleEligibilityStatus.UnknownFileType, result.Status);
+				Assert.Equal("v1 bundle entry 'Compat.App.dll' has raw file type 1; only raw type 0 can be preserved.", result.Message);
+				Assert.Equal("Compat.App.dll", result.RelativePath);
+				Assert.NotNull(result.EntryIndex);
+			}
+			finally {
+				if (Directory.Exists(sourceRoot))
+					Directory.Delete(sourceRoot, recursive: true);
+			}
+		}
+
+		[Fact]
+		public void V2UnknownRawTypeRemainsRejected() {
+			ModernBundleFixture fixture = GetFixture();
+			string sourceRoot = Path.Combine(Path.GetTempPath(),
+				"dnSpy-bnd024-v2-eligibility-" + Guid.NewGuid().ToString("N"));
+			Directory.CreateDirectory(sourceRoot);
+			try {
+				string appHost = Path.Combine(fixture.Root, "obj", "App", "Release", "net10.0", "win-x64", "apphost.exe");
+				var bundler = new Bundler("V2Default.exe", sourceRoot,
+					BundleOptions.BundleNativeBinaries | BundleOptions.BundleSymbolFiles,
+					System.Runtime.InteropServices.OSPlatform.Windows,
+					System.Runtime.InteropServices.Architecture.X64, new Version(5, 0),
+					appAssemblyName: "Compat.App", macosCodesign: false);
+				string source = bundler.GenerateBundle(new[] {
+					new FileSpec(appHost, "V2Default.exe"),
+					new FileSpec(fixture.BuildMainAssemblyPath, "Compat.App.dll"),
+					new FileSpec(appHost, "native-component.dll"),
+					new FileSpec(Path.Combine(fixture.Root, "build", "App", "Release", "net10.0", "win-x64", "SingleFile.App.deps.json"), "Compat.App.deps.json"),
+					new FileSpec(Path.Combine(fixture.Root, "build", "App", "Release", "net10.0", "win-x64", "SingleFile.App.runtimeconfig.json"), "Compat.App.runtimeconfig.json"),
+					new FileSpec(Path.Combine(fixture.Root, "build", "App", "Release", "net10.0", "win-x64", "SingleFile.App.pdb"), "Compat.App.pdb"),
+				});
+				SetManifestType(source, "Compat.App.dll", 0xFE);
+
+				WindowsBundleEligibilityResult result = inspector.Inspect(source);
+
+				Assert.Equal(WindowsBundleEligibilityStatus.UnknownFileType, result.Status);
+				Assert.Equal("Bundle entry type 254 cannot be preserved by HostModel.", result.Message);
+				Assert.Equal("Compat.App.dll", result.RelativePath);
+				Assert.NotNull(result.EntryIndex);
+			}
+			finally {
+				if (Directory.Exists(sourceRoot))
+					Directory.Delete(sourceRoot, recursive: true);
+			}
 		}
 
 		[Fact]

@@ -12,6 +12,7 @@ using Microsoft.NET.HostModel.AppHost;
 using Xunit;
 
 namespace dnSpy.Bundles.Tests {
+	[Collection("Bundle temporary directory")]
 	public sealed class WindowsAppHostReconstructorTests {
 		[Fact]
 		public void ReconstructsExactPayloadPrefixAndHostModelPlaceholder() {

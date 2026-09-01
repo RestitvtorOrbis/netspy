@@ -19,4 +19,8 @@
     <PackageReference Include="System.Reflection.Metadata" Version="10.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../Libraries/Microsoft.NET.HostModel.Bundle/Microsoft.NET.HostModel.Bundle.csproj" />
+  </ItemGroup>
+
 </Project>

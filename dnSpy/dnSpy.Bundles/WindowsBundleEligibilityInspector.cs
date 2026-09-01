@@ -15,6 +15,8 @@ namespace dnSpy.Bundles {
 	/// <summary>Performs the read-only preflight required before Windows bundle reconstruction.</summary>
 	public sealed class WindowsBundleEligibilityInspector {
 		const uint ReadyToRunSignature = 0x00525452;
+		const string RuntimeConfigSuffix = ".runtimeconfig.json";
+		const string DepsSuffix = ".deps.json";
 		/// <summary>
 		/// Bounds the one managed entry materialized for PE/metadata inspection. The bundle reader
 		/// deliberately allows much larger entries for callers with an explicit need to stream
@@ -97,24 +99,39 @@ namespace dnSpy.Bundles {
 					hash, pe.HasAuthenticodeSignature);
 			}
 
-			BundleEntry? unknown = workspace.Bundle.Entries.FirstOrDefault(entry =>
-				entry.FileType == BundleFileType.Unknown);
-			if (unknown is not null) {
-				return EntryResult(WindowsBundleEligibilityStatus.UnknownFileType,
-					"Bundle entry type " + unknown.RawFileType + " cannot be preserved by HostModel.",
-					hash, pe.HasAuthenticodeSignature, unknown);
+			bool isV1 = workspace.Bundle.Manifest.MajorVersion == 1;
+			if (isV1) {
+				// v1 serializes every file type as raw zero. The parser deliberately exposes that
+				// format truth as Unknown; eligibility may infer the payload kind only after this
+				// preservation invariant has been checked.
+				foreach (BundleEntry entry in workspace.Bundle.Entries) {
+					if (entry.RawFileType != 0)
+						return EntryResult(WindowsBundleEligibilityStatus.UnknownFileType,
+							"v1 bundle entry '" + entry.RelativePath + "' has raw file type " +
+							entry.RawFileType + "; only raw type 0 can be preserved.", hash,
+							pe.HasAuthenticodeSignature, entry);
+				}
+			}
+			else {
+				BundleEntry? unknown = workspace.Bundle.Entries.FirstOrDefault(entry =>
+					entry.FileType == BundleFileType.Unknown);
+				if (unknown is not null) {
+					return EntryResult(WindowsBundleEligibilityStatus.UnknownFileType,
+						"Bundle entry type " + unknown.RawFileType + " cannot be preserved by HostModel.",
+						hash, pe.HasAuthenticodeSignature, unknown);
+				}
 			}
 
-			BundleEntry[] assemblies = workspace.Bundle.Entries.Where(entry =>
-				entry.FileType == BundleFileType.Assembly).ToArray();
-			if (assemblies.Length == 0) {
-				return Result(WindowsBundleEligibilityStatus.NoManagedAssembly,
-					"The bundle contains no conventional managed assembly entry.", hash,
-					pe.HasAuthenticodeSignature);
-			}
-
+			string appAssemblyName = isV1 ? GetAppAssemblyName(workspace.Bundle) : string.Empty;
 			var identities = new Dictionary<AssemblyIdentity, BundleEntry>();
-			foreach (BundleEntry entry in assemblies) {
+			bool hasManagedAssembly = false;
+			foreach (BundleEntry entry in workspace.Bundle.Entries) {
+				BundleFileType fileType = isV1
+					? InferV1FileType(workspace, entry, appAssemblyName)
+					: entry.FileType;
+				if (fileType != BundleFileType.Assembly)
+					continue;
+				hasManagedAssembly = true;
 				try {
 					byte[] image = ReadManagedAssembly(workspace, entry);
 					using var stream = new MemoryStream(image, writable: false);
@@ -161,6 +178,11 @@ namespace dnSpy.Bundles {
 						pe.HasAuthenticodeSignature, entry);
 				}
 			}
+			if (!hasManagedAssembly) {
+				return Result(WindowsBundleEligibilityStatus.NoManagedAssembly,
+					"The bundle contains no conventional managed assembly entry.", hash,
+					pe.HasAuthenticodeSignature);
+			}
 
 			string message = pe.HasAuthenticodeSignature
 				? "The Windows x64 bundle is eligible, but rebuilding it will invalidate its Authenticode signature."
@@ -178,6 +200,64 @@ namespace dnSpy.Bundles {
 			if (block.Length < cor.ManagedNativeHeaderDirectory.Size)
 				return false;
 			return block.GetReader().ReadUInt32() == ReadyToRunSignature;
+		}
+
+		static BundleFileType InferV1FileType(BundleWorkspace workspace, BundleEntry entry,
+			string appAssemblyName) {
+			// Keep this order aligned with HostModel's InferType(): exact config names win over
+			// the extension/PE checks, then PDBs win over PE-shaped content. This is important for
+			// malformed or adversarial config/symbol payloads that happen to begin with MZ.
+			if (StringComparer.Ordinal.Equals(entry.RelativePath, appAssemblyName + DepsSuffix))
+				return BundleFileType.DepsJson;
+			if (StringComparer.Ordinal.Equals(entry.RelativePath, appAssemblyName + RuntimeConfigSuffix))
+				return BundleFileType.RuntimeConfigJson;
+			if (StringComparer.OrdinalIgnoreCase.Equals(Path.GetExtension(entry.RelativePath), ".pdb"))
+				return BundleFileType.Symbols;
+
+			try {
+				// v1 entries are uncompressed, so the bounded logical stream is seekable and
+				// PEReader can inspect headers without materializing the whole entry. Managed
+				// entries are materialized only once below, under the 64 MiB inspection limit.
+				using Stream current = workspace.OpenCurrentRead(entry);
+				using var reader = new PEReader(current);
+				if (reader.PEHeaders.PEHeader is null)
+					return BundleFileType.Unknown;
+				return reader.PEHeaders.CorHeader is null
+					? BundleFileType.NativeBinary : BundleFileType.Assembly;
+			}
+			catch (OutOfMemoryException) {
+				return BundleFileType.Unknown;
+			}
+			catch (Exception ex) when (IsManagedPeFailure(ex)) {
+				return BundleFileType.Unknown;
+			}
+		}
+
+		static string GetAppAssemblyName(BundleFile bundle) {
+			string? name = FindConfigBaseName(bundle, RuntimeConfigSuffix) ??
+				FindConfigBaseName(bundle, DepsSuffix);
+			if (string.IsNullOrWhiteSpace(name))
+				name = RemoveExtension(Path.GetFileName(bundle.Filename));
+			return name ?? string.Empty;
+		}
+
+		static string? FindConfigBaseName(BundleFile bundle, string suffix) {
+			foreach (BundleEntry entry in bundle.Entries) {
+				string path = entry.RelativePath;
+				if (!path.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+					continue;
+				int slash = path.LastIndexOf('/');
+				string fileName = slash < 0 ? path : path.Substring(slash + 1);
+				string baseName = fileName.Substring(0, fileName.Length - suffix.Length);
+				if (!string.IsNullOrWhiteSpace(baseName))
+					return baseName;
+			}
+			return null;
+		}
+
+		static string RemoveExtension(string filename) {
+			int dot = filename.LastIndexOf('.');
+			return dot <= 0 ? filename : filename.Substring(0, dot);
 		}
 
 		static byte[] ReadManagedAssembly(BundleWorkspace workspace, BundleEntry entry) {
