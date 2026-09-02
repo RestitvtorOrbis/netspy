@@ -82,6 +82,91 @@ namespace dnSpy.Bundles.Tests {
 		}
 
 		[Fact]
+		public void SavedBaselineMakesRevertDirtyAndResaveClean() {
+			using SyntheticFactory factory = SyntheticFactory.CreateV1(new[] {
+				new SyntheticEntry(1, "first", new byte[] { 1, 2, 3 }, 64),
+			});
+			using BundleWorkspace workspace = new BundleWorkspace(factory.Result.Bundle!);
+			BundleEntry entry = workspace.Bundle.Entries[0];
+			var changes = new List<BundleWorkspaceChangedEventArgs>();
+			workspace.Changed += (_, e) => changes.Add(e);
+
+			workspace.SetReplacement(entry, new byte[] { 4, 5 }, new BundleReplacementInfo("saved"));
+			changes.Clear();
+			workspace.MarkSaved();
+
+			Assert.False(workspace.HasChanges);
+			Assert.True(workspace.HasSavedReplacements);
+			Assert.Equal(BundleWorkspaceEntryState.Unchanged, workspace.GetEntryState(entry));
+			Assert.Equal(new byte[] { 4, 5 }, Read(workspace.OpenCurrentRead(entry)));
+			Assert.Single(changes);
+			Assert.True(changes[0].IsSaved);
+			Assert.Same(entry, changes[0].Entry);
+
+			changes.Clear();
+			Assert.True(workspace.Revert(entry));
+			Assert.True(workspace.HasChanges);
+			Assert.False(workspace.HasSavedReplacements);
+			Assert.Equal(BundleWorkspaceEntryState.Reverted, workspace.GetEntryState(entry));
+			Assert.Equal(new byte[] { 1, 2, 3 }, Read(workspace.OpenCurrentRead(entry)));
+
+			changes.Clear();
+			workspace.MarkSaved();
+			Assert.False(workspace.HasChanges);
+			Assert.False(workspace.HasSavedReplacements);
+			Assert.Equal(BundleWorkspaceEntryState.Unchanged, workspace.GetEntryState(entry));
+			Assert.Single(changes);
+			Assert.True(changes[0].IsSaved);
+			Assert.Same(entry, changes[0].Entry);
+			Assert.Null(changes[0].ReplacementInfo);
+		}
+
+		[Fact]
+		public void ResavingAfterRevertAllEmitsSavedRefreshForBaselineOnlyEntries() {
+			using SyntheticFactory factory = SyntheticFactory.CreateV1(new[] {
+				new SyntheticEntry(1, "first", new byte[] { 1, 2, 3 }, 64),
+				new SyntheticEntry(2, "second", new byte[] { 9, 8, 7 }, 67),
+			});
+			using BundleWorkspace workspace = new BundleWorkspace(factory.Result.Bundle!);
+			BundleEntry[] entries = workspace.Bundle.Entries.ToArray();
+			var originals = entries.ToDictionary(entry => entry, entry => Read(entry.OpenLogicalRead()));
+			var changes = new List<BundleWorkspaceChangedEventArgs>();
+			workspace.Changed += (_, e) => changes.Add(e);
+
+			workspace.SetReplacement(entries[0], new byte[] { 4, 5 }, new BundleReplacementInfo("first"));
+			workspace.SetReplacement(entries[1], new byte[] { 6, 7 }, new BundleReplacementInfo("second"));
+			changes.Clear();
+			workspace.MarkSaved();
+			Assert.False(workspace.HasChanges);
+			Assert.True(workspace.HasSavedReplacements);
+			Assert.Equal(2, changes.Count);
+			Assert.All(changes, change => Assert.True(change.IsSaved));
+
+			changes.Clear();
+			workspace.RevertAll();
+			Assert.True(workspace.HasChanges);
+			Assert.False(workspace.HasSavedReplacements);
+			foreach (BundleEntry entry in entries) {
+				Assert.Equal(originals[entry], Read(workspace.OpenCurrentRead(entry)));
+				Assert.Equal(BundleWorkspaceEntryState.Reverted, workspace.GetEntryState(entry));
+			}
+
+			changes.Clear();
+			workspace.MarkSaved();
+			Assert.False(workspace.HasChanges);
+			Assert.False(workspace.HasSavedReplacements);
+			Assert.All(entries, entry => Assert.Equal(BundleWorkspaceEntryState.Unchanged,
+				workspace.GetEntryState(entry)));
+			Assert.Equal(entries.Length, changes.Count);
+			Assert.All(changes, change => {
+				Assert.True(change.IsSaved);
+				Assert.Null(change.ReplacementInfo);
+			});
+			Assert.Equal(entries.OrderBy(entry => entry.Index),
+				changes.Select(change => change.Entry).OrderBy(entry => entry.Index));
+		}
+
+		[Fact]
 		public void InvalidReplacementPreservesTheLastValidStateAndForeignEntriesAreRejected() {
 			using SyntheticFactory factory = SyntheticFactory.CreateV1(new[] {
 				new SyntheticEntry(1, "first", new byte[] { 1, 2, 3 }, 64),

@@ -71,6 +71,20 @@ namespace dnSpy.Bundles.Extension {
 		/// <summary>The physical source filename retained for later workspace operations.</summary>
 		public string SourceFilename => sourceFilename;
 
+		/// <summary>
+		/// The most recent destination successfully produced by Save Bundle As, or <see langword="null"/>
+		/// when this workspace has not been saved as a bundle yet.
+		/// </summary>
+		public string? LastSavedBundleFilename { get; private set; }
+
+		/// <summary>Records a successful bundle publication and establishes its logical baseline.</summary>
+		internal void RecordSuccessfulBundleSave(string destinationFilename) {
+			if (destinationFilename is null)
+				throw new ArgumentNullException(nameof(destinationFilename));
+			workspace.MarkSaved();
+			LastSavedBundleFilename = destinationFilename;
+		}
+
 		/// <summary>Resolver scoped to modules activated from this bundle only.</summary>
 		public BundleAssemblyResolver AssemblyResolver => bundleAssemblyResolver;
 

@@ -101,6 +101,7 @@ namespace dnSpy.Bundles.Extension {
 			BundleWorkspaceCommandSelection.IsDocumentTreeContext(context);
 
 		internal static bool CanRevert(BundleEntryDocument entry) =>
+			entry.BundleDocument.Workspace.HasReplacement(entry.Entry) ||
 			entry.WorkspaceState == BundleWorkspaceEntryState.Modified ||
 			entry.WorkspaceState == BundleWorkspaceEntryState.Error;
 	}
@@ -144,7 +145,8 @@ namespace dnSpy.Bundles.Extension {
 
 	abstract class RevertAllBundleChangesMenuCommand : MenuItemBase {
 		internal static bool CanRevertAll(BundleDsDocument bundle) =>
-			bundle.HasPendingChanges || bundle.HasWorkspaceErrors;
+			bundle.HasPendingChanges || bundle.HasWorkspaceErrors ||
+			bundle.Workspace.HasSavedReplacements;
 
 		protected static BundleDsDocument[] GetBundles(IMenuItemContext context) =>
 			BundleWorkspaceCommandSelection.GetBundleDocuments(

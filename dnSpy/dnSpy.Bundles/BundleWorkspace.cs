@@ -17,6 +17,15 @@ namespace dnSpy.Bundles {
 		Dictionary<BundleEntry, Exception> errors =
 			new Dictionary<BundleEntry, Exception>(BundleEntryReferenceComparer.Instance);
 		HashSet<BundleEntry> reverted = new HashSet<BundleEntry>(BundleEntryReferenceComparer.Instance);
+		// Save Bundle As establishes a private logical baseline. Replacement bytes remain installed
+		// so a later rebuild uses the published state, while Revert still restores the source entry.
+		HashSet<BundleEntry> savedReplacements =
+			new HashSet<BundleEntry>(BundleEntryReferenceComparer.Instance);
+		// Entries in the last published logical baseline. This is intentionally separate from
+		// savedReplacements: after a revert the source bytes are active, but they differ from the
+		// published replacement and must therefore remain dirty until another save succeeds.
+		HashSet<BundleEntry> savedBaselineReplacements =
+			new HashSet<BundleEntry>(BundleEntryReferenceComparer.Instance);
 		int disposed;
 
 		sealed class Replacement {
@@ -44,12 +53,23 @@ namespace dnSpy.Bundles {
 		/// <summary>The source bundle owned by this workspace.</summary>
 		public BundleFile Bundle { get; }
 
-		/// <summary>True when at least one entry has a replacement.</summary>
+		/// <summary>True when the current logical state differs from the last successful bundle save.</summary>
 		public bool HasChanges {
 			get {
 				lock (gate) {
 					EnsureNotDisposed();
-					return replacements.Count != 0;
+					return replacements.Any(a => !savedReplacements.Contains(a.Key)) ||
+						savedBaselineReplacements.Any(a => !replacements.ContainsKey(a));
+				}
+			}
+		}
+
+		/// <summary>True when a current replacement is part of the last successful bundle save.</summary>
+		public bool HasSavedReplacements {
+			get {
+				lock (gate) {
+					EnsureNotDisposed();
+					return savedReplacements.Count != 0;
 				}
 			}
 		}
@@ -85,7 +105,8 @@ namespace dnSpy.Bundles {
 				if (errors.ContainsKey(entry))
 					return BundleWorkspaceEntryState.Error;
 				if (replacements.ContainsKey(entry))
-					return BundleWorkspaceEntryState.Modified;
+					return savedReplacements.Contains(entry)
+						? BundleWorkspaceEntryState.Unchanged : BundleWorkspaceEntryState.Modified;
 				return reverted.Contains(entry)
 					? BundleWorkspaceEntryState.Reverted : BundleWorkspaceEntryState.Unchanged;
 			}
@@ -153,12 +174,13 @@ namespace dnSpy.Bundles {
 		public Stream OpenCurrentRead(BundleEntry entry) {
 			lock (gate) {
 				EnsureEntry(entry);
-				if (replacements.TryGetValue(entry, out Replacement? replacement))
+				if (replacements.TryGetValue(entry, out Replacement? replacement)) {
 					// Keep the replacement array private to this workspace. The overload
 					// taking publiclyVisible:false prevents callers from recovering the
 					// backing array through MemoryStream.GetBuffer/TryGetBuffer.
 					return new MemoryStream(replacement.Bytes, 0, replacement.Bytes.Length,
 						writable: false, publiclyVisible: false);
+				}
 				return OpenOriginalReadCore(entry);
 			}
 		}
@@ -218,6 +240,8 @@ namespace dnSpy.Bundles {
 					updated[candidate.Key] = candidate.Value;
 				replacements = updated;
 				foreach (KeyValuePair<BundleEntry, Replacement> candidate in pendingEntries)
+					savedReplacements.Remove(candidate.Key);
+				foreach (KeyValuePair<BundleEntry, Replacement> candidate in pendingEntries)
 					errors.Remove(candidate.Key);
 				foreach (KeyValuePair<BundleEntry, Replacement> candidate in pendingEntries)
 					reverted.Remove(candidate.Key);
@@ -239,6 +263,7 @@ namespace dnSpy.Bundles {
 				bool hasError = errors.TryGetValue(entry, out error);
 				if (hasReplacement || hasError) {
 					replacements.Remove(entry);
+					savedReplacements.Remove(entry);
 					errors.Remove(entry);
 					reverted.Add(entry);
 					change = new BundleWorkspaceChangedEventArgs(entry,
@@ -259,6 +284,7 @@ namespace dnSpy.Bundles {
 				foreach (BundleEntry entry in Bundle.Entries) {
 					if (replacements.TryGetValue(entry, out Replacement? replacement)) {
 						replacements.Remove(entry);
+						savedReplacements.Remove(entry);
 						errors.Remove(entry);
 						reverted.Add(entry);
 						(changes ??= new List<BundleWorkspaceChangedEventArgs>()).Add(
@@ -273,6 +299,61 @@ namespace dnSpy.Bundles {
 								BundleWorkspaceChangeKind.Reverted, null, error));
 					}
 				}
+			}
+			if (changes is null)
+				return;
+			foreach (BundleWorkspaceChangedEventArgs change in changes)
+				Changed?.Invoke(this, change);
+		}
+
+		/// <summary>
+		/// Marks the current logical replacement bytes as persisted by Save Bundle As.
+		/// </summary>
+		/// <remarks>
+		/// Replacement bytes stay in the workspace so a later rebuild uses the saved result. The
+		/// source executable itself is never modified, and a revert continues to restore its
+		/// original logical bytes.
+		/// </remarks>
+		public void MarkSaved() {
+			List<BundleWorkspaceChangedEventArgs>? changes = null;
+			lock (gate) {
+				EnsureNotDisposed();
+				var changedEntries = new HashSet<BundleEntry>(BundleEntryReferenceComparer.Instance);
+				var emittedEntries = new HashSet<BundleEntry>(BundleEntryReferenceComparer.Instance);
+				foreach (BundleEntry entry in reverted)
+					changedEntries.Add(entry);
+				foreach (BundleEntry entry in savedBaselineReplacements)
+					if (!replacements.ContainsKey(entry))
+						changedEntries.Add(entry);
+				savedBaselineReplacements.RemoveWhere(entry => !replacements.ContainsKey(entry));
+				savedReplacements.Clear();
+				foreach (KeyValuePair<BundleEntry, Replacement> replacement in replacements) {
+					savedReplacements.Add(replacement.Key);
+					savedBaselineReplacements.Add(replacement.Key);
+					if (changedEntries.Add(replacement.Key)) {
+						(changes ??= new List<BundleWorkspaceChangedEventArgs>()).Add(
+							new BundleWorkspaceChangedEventArgs(replacement.Key,
+								BundleWorkspaceChangeKind.Saved, replacement.Value.Info));
+						emittedEntries.Add(replacement.Key);
+					}
+				}
+				foreach (KeyValuePair<BundleEntry, Exception> error in errors)
+					if (changedEntries.Add(error.Key)) {
+						(changes ??= new List<BundleWorkspaceChangedEventArgs>()).Add(
+							new BundleWorkspaceChangedEventArgs(error.Key,
+								BundleWorkspaceChangeKind.Saved, null));
+						emittedEntries.Add(error.Key);
+					}
+				// A resave after RevertAll can have no replacement or error entries. Still notify
+				// listeners so tree state refreshes from Reverted to Unchanged.
+				foreach (BundleEntry entry in changedEntries)
+					if (emittedEntries.Add(entry))
+						(changes ??= new List<BundleWorkspaceChangedEventArgs>()).Add(
+							new BundleWorkspaceChangedEventArgs(entry,
+								BundleWorkspaceChangeKind.Saved, GetReplacementInfoCore(entry)));
+
+				errors.Clear();
+				reverted.Clear();
 			}
 			if (changes is null)
 				return;
@@ -324,6 +405,8 @@ namespace dnSpy.Bundles {
 				replacements.Clear();
 				errors.Clear();
 				reverted.Clear();
+				savedReplacements.Clear();
+				savedBaselineReplacements.Clear();
 				Changed = null;
 				Bundle.Dispose();
 			}

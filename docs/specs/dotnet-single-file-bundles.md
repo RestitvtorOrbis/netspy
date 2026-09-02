@@ -249,16 +249,20 @@ This project does not rewrite debugger engines. Original and rebuilt bundles are
 public sealed class BundleWorkspace : IDisposable {
     public BundleFile Bundle { get; }
     public bool HasChanges { get; }
+    public bool HasSavedReplacements { get; }
     public IReadOnlyCollection<BundleEntry> ModifiedEntries { get; }
     public event EventHandler<BundleWorkspaceChangedEventArgs>? Changed;
     public Stream OpenCurrentRead(BundleEntry entry);
     public void SetReplacement(BundleEntry entry, byte[] bytes, BundleReplacementInfo info);
     public bool Revert(BundleEntry entry);
     public void RevertAll();
+    public void MarkSaved();
 }
 ```
 
 Replacement arrays are defensively copied once and exposed only as read-only streams. Failed serialization never calls `SetReplacement`, leaving the prior replacement/original state intact. Non-managed replacement is not exposed by UI in the MVP.
+
+After a successful Save Bundle As, `MarkSaved()` establishes the published logical bytes as the clean baseline while retaining replacement bytes for later saves. Entry and root Revert commands remain available for saved replacements. Reverting then restores source-bundle bytes and is dirty relative to the published baseline, so close guards still protect it; saving that reverted state establishes the source bytes as the new clean baseline and raises `Saved` change events for tree refresh.
 
 `Apply Module Changes to Bundle` lives in `dnSpy.AsmEditor` because that extension owns dnlib writer options and undo state. It accepts only `IDsBundleEntryDocument`, blocks R2R, serializes completely, validates the result by reopening it with dnlib, then calls `SetWorkspaceReplacement`. Revert commands and dirty-node refresh live in `Extensions/dnSpy.Bundles`.
 
@@ -942,7 +946,7 @@ The arrows are mandatory execution order, not merely opportunities inferred from
 | BND-023 | PR-06 | Completed | `feat(BND-023): reconstruct temporary Windows apphost` | WindowsAppHostReconstructorTests pass 6/6, including malformed entry-range and certificate-placement cleanup; SourceNonMutationRegressionTests pass 1/1 with unchanged source hash; the portable suite passes 109 with 3 historical skips; core net10/net48 builds pass with 0 warnings/errors; `git diff --check` and the untracked-file whitespace audit are clean; full `build.ps1` is unavailable because `pwsh` is not installed |
 | BND-024 | PR-06 | Completed | `feat(BND-024): generate bundles with HostModel` | WindowsBundleGenerationTests pass 10/10; WindowsBundleEligibilityTests pass 15/15; HostModelParityTests pass 4/4; the portable suite passes 121 with 3 historical prerequisite skips; v1 preserves parser raw-zero/Unknown truth with bounded config/PDB/PE inference and HostModel default all-content output, v2/v6 map compatibility mode to `BundleAllContent` only when flagged and retain native/symbol inventory, and v6 compression follows original compressed entries; current replacements, flat private inputs, exact reconstructed-host `FileSpec`, cancellation, failure cleanup, and disposable temporary-output cleanup are covered; HostModel/core/extension net10 builds are clean; HostModel net48 is clean with injected reference assemblies and core net48 is available with injection (0 errors; unsigned vendored HostModel warning on recompilation), while extension net48 is blocked by the pre-existing `BundleDocumentKey.cs:32` generic `Enum.IsDefined(kind)` incompatibility; whitespace checks are clean; full `build.ps1` is unavailable because `pwsh` is not installed. |
 | BND-025 | PR-06 | Completed | `feat(BND-025): publish validated bundles atomically` | BundlePublicationTests pass 5/5 and SourceDestinationPreservationRegressionTests pass 3/3; tests cover ordered paths/types/logical bytes, current replacement bytes, successful source hashing, existing-destination atomic replacement, corrupted generated content/path/type rejection, generation failure, cancellation, source-path rejection, and private-generation cleanup; the portable suite passes 129 with 3 historical prerequisite skips; HostModel/core net10 builds and whitespace checks are clean; independent review approved. With PowerShell now installed, the exact `build.ps1` reaches the missing standalone `msbuild` blocker, `-NoMsbuild` reaches the missing .NET Framework 4.8 reference assemblies blocker, and the authoritative Windows matrix remains configured in GitHub Actions. |
-| BND-026 | PR-06 | Planned | — | — |
+| BND-026 | PR-06 | Completed | `feat(BND-026): add Save Bundle As workflow` | BundleWorkspaceTests pass 6/6 and the portable suite passes 131 with 3 historical prerequisite skips; extension and integration projects build with 0 warnings/errors. Exact SaveBundleAsCommandTests and SaveModuleCommandRegressionTests filters compile but cannot execute on Linux because Microsoft.WindowsDesktop.App 10.0.0 is unavailable. Coverage includes File/context exports, source exclusion, explicit Authenticode warning, cancellation/failure safety, close-guard save integration, successful destination tracking, saved logical baselines, enabled entry/root revert after save, save→revert one/all→resave dirty/clean transitions and refresh events, source non-mutation, and ordinary Save Module isolation; `git diff --check` passes and independent review approved after two baseline-state revisions. The exact `build.ps1` remains blocked locally by missing standalone `msbuild`; the authoritative Windows matrix is configured in GitHub Actions. |
 | BND-027 | PR-06 | Planned | — | — |
 | BND-028 | PR-06 | Planned | — | — |
 

@@ -11,11 +11,7 @@ using dnSpy.Contracts.Documents;
 using dnSpy.Contracts.Documents.Bundles;
 
 namespace dnSpy.Bundles.Extension {
-	/// <summary>
-	/// Narrow seam used by the close guard until the Save Bundle As implementation is available.
-	/// PR-06 supplies the actual exporter; an empty composition deliberately treats Save as
-	/// unavailable and leaves the workspace dirty.
-	/// </summary>
+	/// <summary>Narrow seam used by the close guard to save a bundle workspace.</summary>
 	public interface IBundleWorkspaceSaveService {
 		/// <summary>Writes the bundle to a new destination and returns whether it completed.</summary>
 		bool SaveBundleAs(IDsBundleDocument document);
@@ -32,7 +28,7 @@ namespace dnSpy.Bundles.Extension {
 			public int GetHashCode(IDsBundleDocument obj) => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj);
 		}
 
-		/// <summary>Creates a guard using the unavailable Save Bundle As seam.</summary>
+		/// <summary>Creates a guard without a composed saver, primarily for isolated callers.</summary>
 		public BundleDocumentCloseGuard(IMessageBoxService messageBoxService)
 			: this(messageBoxService, Array.Empty<Lazy<IBundleWorkspaceSaveService>>()) {
 		}
@@ -90,8 +86,7 @@ namespace dnSpy.Bundles.Extension {
 
 		bool TrySave(IDsBundleDocument bundle) {
 			if (saveServices.Length == 0) {
-				// PR-06 installs the saver exporter. Until then, keep the workspace dirty and
-				// cancel without opening a second modal prompt.
+				// Keep the workspace dirty when composition did not provide a saver.
 				return false;
 			}
 			try {

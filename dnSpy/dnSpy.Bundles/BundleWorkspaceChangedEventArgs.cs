@@ -16,6 +16,8 @@ namespace dnSpy.Bundles {
 		Revert = Reverted,
 		/// <summary>A workspace operation failed for this entry.</summary>
 		Error,
+		/// <summary>The current replacement was persisted by Save Bundle As.</summary>
+		Saved,
 	}
 
 	/// <summary>Event data for a <see cref="BundleWorkspace"/> mutation.</summary>
@@ -49,5 +51,7 @@ namespace dnSpy.Bundles {
 		public bool IsRevert => ChangeKind == BundleWorkspaceChangeKind.Reverted;
 		/// <summary>True when this event reports a failed workspace operation.</summary>
 		public bool IsError => ChangeKind == BundleWorkspaceChangeKind.Error;
+		/// <summary>True when Save Bundle As persisted this entry's workspace state.</summary>
+		public bool IsSaved => ChangeKind == BundleWorkspaceChangeKind.Saved;
 	}
 }
