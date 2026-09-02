@@ -44,7 +44,7 @@ Save Bundle As  -> reconstructed clean Windows x64 apphost
 - ReadyToRun is inspect-only for bundle apply/rebuild. High-confidence Windows NativeAOT is detected and explained. MVP rebuilding is Windows x64 only.
 - Rebuild depends on independent approval of the exact 15-file MIT-licensed HostModel source closure, five canonical Windows-only patches, pristine/patch/hunk/result hashes, and explicit compile list in the normative specification. Rejection blocks rebuilding; it does not authorize a handwritten writer.
 - Historical fixtures use exact 3.1.426, 5.0.408, 6.0.428, 8.0.419, and 10.0.111 SDKs. Generated binaries are CI artifacts, not committed files.
-- Full WPF/.NET Framework/Windows execution verification requires Windows. This Linux host can run future net10 core/parser tests but lacks `pwsh`, standalone MSBuild, and Windows execution.
+- Full WPF/.NET Framework/Windows execution verification requires Windows. This Linux host can run net10 core/parser tests and PowerShell scripts, but lacks standalone MSBuild, .NET Framework 4.8 reference assemblies, the Windows Desktop runtime, and Windows execution.
 
 ## Delivery
 

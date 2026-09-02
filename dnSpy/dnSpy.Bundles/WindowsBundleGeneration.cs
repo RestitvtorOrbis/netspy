@@ -60,7 +60,7 @@ namespace dnSpy.Bundles {
 	/// The original bundle is opened read-only. All logical entry content is copied to generated
 	/// flat temporary names; manifest relative paths are never interpreted as disk paths.
 	/// </remarks>
-	public sealed class WindowsBundleRebuilder {
+	public sealed class WindowsBundleRebuilder : IWindowsBundleGenerator {
 		const string RuntimeConfigSuffix = ".runtimeconfig.json";
 		const string DepsSuffix = ".deps.json";
 		const int CopyBufferSize = 64 * 1024;
