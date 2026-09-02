@@ -95,14 +95,11 @@ jobs:
         uses: actions/setup-dotnet@v6.0.0
         with:
           dotnet-version: ${{ matrix.sdk }}
-          dotnet-quality: ga
 
-      - name: Assert pinned SDK and generate required artifacts
+      - name: Generate required artifacts with pinned SDK
         run: |
-          $actual = (dotnet --version).Trim()
-          if ($actual -ne '${{ matrix.sdk }}') {
-            throw "Expected SDK ${{ matrix.sdk }}, but dotnet --version returned $actual"
-          }
+          # The generator enters the generation directory before checking dotnet --version,
+          # so its adjacent global.json selects and verifies the exact installed SDK.
           & .\Tests\TestAssets\SingleFile\Generate-HistoricalFixtures.ps1 `
             -Generation '${{ matrix.generation }}'
           if ($LASTEXITCODE -ne 0) {
