@@ -889,19 +889,140 @@ Acceptance: user can create a new validated bundle; warning is explicit; cancel/
 
 ### BND-027 — Rebuild logical-equivalence integration tests (PR-06)
 
-Dependencies: BND-026.
+Dependencies: BND-026 and approved CI-002 from `docs/specs/ci-completion.md`.
 
 Cover ordered inventory, config/native/symbol preservation, compression behavior, FDD/SCD, PDB, multiple assemblies, corrupt source, source non-overwrite, and own-parser reopen.
 
-Acceptance: covered fixtures preserve promised semantics and unsupported cases fail with precise messages.
+Adopt and finish the three pre-existing untracked files in place; they are the starting implementation, not disposable/generated output:
+
+- `Tests/dnSpy.Bundles.IntegrationTests/BundleLogicalEquivalenceTests.cs`
+- `Tests/dnSpy.Bundles.IntegrationTests/IntegrationFixtureLocator.cs`
+- `Tests/dnSpy.Bundles.IntegrationTests/OrdinaryOpenSaveRegressionTests.cs`
+
+Before editing, record their hashes. BND-027 may revise them only where review, compilation, or the acceptance contract requires it, and its commit owns all three complete files. It must not stage `docs/specs/netspy-ui-branding.md` or unrelated work. `IntegrationFixtureLocator` remains the shared, deterministic locator for the modern artifact root and is retained for BND-028; it must fail with an actionable missing-fixture diagnostic rather than skip. The logical comparison is entry-order/type/path/logical-byte based; compressed representation and HostModel physical offsets are deliberately not byte-for-byte contracts.
+
+Initial SHA-256 preservation record (2026-09-03):
+
+| File | SHA-256 |
+|---|---|
+| `BundleLogicalEquivalenceTests.cs` | `fa8966a0331d0192dbbaf1fa2d80018f64e50caf03e2e54d3ff54d046f55a81d` |
+| `IntegrationFixtureLocator.cs` | `9923b1eb6932ff049358bd571639fa3bfc00a63eb936386a6581a35f67e06753` |
+| `OrdinaryOpenSaveRegressionTests.cs` | `16f7e10a075c7361223b87d3ff184c46d9fc723ff89f79d6a84d598486dbdb9f` |
+
+BND-027 extends `IntegrationFixtureLocator` with the historical sidecar contract below and adds a `.NET Core 3.1` / manifest-v1 `scd-uncompressed` logical-equivalence row. That row must reopen source and rebuilt output with this parser; compare ordered paths, raw/file types, and logical bytes; retain both managed assemblies and runtime/native inventory; execute no unsupported compression assertion; and prove source-hash stability. This retains the specification's promised v1 SCD scope.
+
+Historical lookup API:
+
+```csharp
+internal static HistoricalIntegrationFixture FindHistorical(
+    string generation,
+    string variant);
+
+internal sealed record HistoricalIntegrationFixture(
+    string Generation,
+    string Variant,
+    string TargetFramework,
+    string RuntimeIdentifier,
+    int ManifestMajorVersion,
+    bool SelfContained,
+    bool Compressed,
+    bool IncludesSymbols,
+    bool CompatibilityMode,
+    string VariantRoot,
+    string BundlePath);
+```
+
+`DNSPY_BUNDLE_FIXTURES` is an ordered platform-delimited list of roots. For historical lookup, each root may be the common `artifacts/historical` directory, one generation directory, one variant directory, or a `fixture.json` path. The locator normalizes each candidate, searches only the exact `<generation>/<variant>/fixture.json` shape implied by that root, and never recursively selects the first matching filename. It requires exactly one valid result across the configured roots; zero gives an actionable generation/variant diagnostic and duplicates give an ambiguity diagnostic.
+
+The UTF-8 `fixture.json` contract is schema version `2` and requires exact `generation`, `variant`, `targetFramework`, `runtimeIdentifier == "win-x64"`, `manifestMajorVersion`, boolean `selfContained`, `compressed`, `includesSymbols`, and `compatibilityMode`, plus relative `bundle`, `inventory`, and `hashes` paths. Additional schema-v2 fields such as `buildMainAssembly`, `buildDependencyAssembly`, `publishedFiles`, and `expectedEntries` are allowed and ignored by the locator. The locator rejects an unknown schema version, missing/wrongly typed required members, rooted paths, traversal, paths escaping `VariantRoot`, absent files, a sidecar generation/variant mismatch, and a bundle whose resolved path is not a file. BND-027 adds `IntegrationFixtureLocatorTests.cs` covering common-root, generation-root, variant-root, direct-sidecar, multiple-root fallback, missing, duplicate, malformed, traversal, and metadata-mismatch cases. The execution tests consume the returned typed metadata rather than infer properties from directory names.
+
+Acceptance: covered fixtures preserve promised semantics and unsupported cases fail with precise messages; the ordinary DLL and EXE are opened through the existing provider, saved, reopened with dnlib, and leave their sources unchanged; all three adopted files plus the focused new locator-test file are reviewed and committed together with no unrelated path.
 
 ### BND-028 — End-to-end execution matrix and CI gates (PR-06)
 
 Dependencies: BND-027.
 
-On Windows, edit the stable app value, apply, rebuild, execute, and assert changed stdout/exit code for net5, net6, compressed net6, net8, net10, FDD/SCD, and multi-project variants. Run normal build matrix and document R2R/NativeAOT/non-x64 limitations.
+On Windows, edit the compiled `SingleFile.App.Program.Main` string operand from `BUNDLE_VALUE=v1` to `BUNDLE_VALUE=v2` through the existing dnlib/AsmEditor edit path, apply the serialized `SingleFile.App.dll` to the bundle workspace, rebuild, execute, and require exactly `BUNDLE_VALUE=v2` with exit code `0`. (`BundleValue.Value` is a `const` and is inlined, so editing only the dependency field would not prove changed runtime behavior.) Cover `.NET Core 3.1` v1 SCD; net5 FDD, SCD, and compatibility-mode SCD; net6 FDD, SCD, and compressed SCD; net8 SCD; and net10 FDD and SCD. Every fixture also contains the second managed project assembly and the rebuilt inventory must retain it. Execute the unmodified source first and require exactly `BUNDLE_VALUE=v1` with exit code `0`, hash it before/after, and use a 30-second process timeout with asynchronous stdout/stderr draining and process-tree termination on timeout.
 
-Acceptance: every advertised rebuild/runtime row has execution evidence; CI runs core tests plus Windows integration tests and the existing build matrix.
+Add `BundleExecutionEndToEndTests.cs` and `OrdinaryEndToEndRegressionTests.cs`. Reuse `IntegrationFixtureLocator` and the downloaded historical artifact root through `DNSPY_BUNDLE_FIXTURES`; do not regenerate historical fixtures inside the test process. The ordinary regression creates or uses an ordinary console module, executes it before and after the existing edit/save pipeline, and proves bundle-specific publication is not involved.
+
+Extend `.github/workflows/build.yml` with the two canonical jobs below. Keep the four product modes as required jobs. No runtime row may skip because an SDK/runtime/fixture is absent.
+
+```yaml
+  bundle-core-tests:
+    name: Bundle portable core tests
+    needs: historical-bundle-fixtures
+    runs-on: windows-latest
+
+  bundle-integration-tests:
+    name: Bundle Windows integration tests
+    needs: [build, historical-bundle-fixtures, historical-bundle-tests, bundle-core-tests]
+    runs-on: windows-latest
+```
+
+`bundle-core-tests` checks out without submodules, installs SDK `10.0.111`, downloads `dnSpy-single-file-historical-*` with `merge-multiple: true` into `Tests/TestAssets/SingleFile/artifacts/historical`, validates all five generation sidecars, runs `Generate-ModernFixtures.ps1 -Clean`, explicitly restores and builds the test project once, then executes exactly these three disjoint test partitions:
+
+```powershell
+$project = (Resolve-Path 'Tests/dnSpy.Bundles.Tests/dnSpy.Bundles.Tests.csproj').Path
+$historicalRoot = (Resolve-Path 'Tests/TestAssets/SingleFile/artifacts/historical').Path
+$modernRoot = (Resolve-Path 'Tests/TestAssets/SingleFile/Net10/artifacts/net10.0').Path
+$sdkRoot = (Resolve-Path 'Tests/TestAssets/SingleFile/Net10').Path
+
+Push-Location $sdkRoot
+try {
+  $actualSdk = (dotnet --version).Trim()
+  if ($actualSdk -ne '10.0.111') { throw "Expected SDK 10.0.111, got $actualSdk" }
+
+  dotnet restore $project
+  if ($LASTEXITCODE -ne 0) { throw 'Bundle core restore failed' }
+  dotnet build $project -c Release -f net10.0 --no-restore
+  if ($LASTEXITCODE -ne 0) { throw 'Bundle core build failed' }
+
+  # ModernFixtureLocator sees only the modern layout. It cannot recursively
+  # consume historical schema-v2 sidecars from the downloaded common root.
+  $env:DNSPY_BUNDLE_FIXTURES = $modernRoot
+  dotnet test $project -c Release -f net10.0 --no-build --no-restore `
+    --filter 'FullyQualifiedName~ModernPublishedBundleTests' `
+    --logger 'trx;LogFileName=bundle-modern.trx'
+  if ($LASTEXITCODE -ne 0) { throw 'Modern bundle fixture tests failed' }
+
+  # HistoricalPublishedBundleTests sees only the historical schema-v2 root.
+  $env:DNSPY_BUNDLE_FIXTURES = $historicalRoot
+  dotnet test $project -c Release -f net10.0 --no-build --no-restore `
+    --filter 'FullyQualifiedName~HistoricalPublishedBundleTests' `
+    --logger 'trx;LogFileName=bundle-historical.trx'
+  if ($LASTEXITCODE -ne 0) { throw 'Historical bundle fixture tests failed' }
+
+  # The remainder excludes historical tests but includes other core/rebuild
+  # tests that intentionally consume ModernFixtureLocator.
+  $env:DNSPY_BUNDLE_FIXTURES = $modernRoot
+  dotnet test $project -c Release -f net10.0 --no-build --no-restore `
+    --filter 'FullyQualifiedName!~ModernPublishedBundleTests&FullyQualifiedName!~HistoricalPublishedBundleTests' `
+    --logger 'trx;LogFileName=bundle-portable-remainder.trx'
+  if ($LASTEXITCODE -ne 0) { throw 'Remaining portable bundle tests failed' }
+}
+finally {
+  Remove-Item Env:DNSPY_BUNDLE_FIXTURES -ErrorAction SilentlyContinue
+  Pop-Location
+}
+```
+
+All three commands must succeed, and their filters are mutually exclusive and exhaustive for the two fixture-owning classes plus the remainder. Both modern and remainder partitions expose only `$modernRoot`; the historical partition exposes only `$historicalRoot`. The job uploads all three TRX files on `always()`. It must not set one multi-root value for the portable suite: `ModernFixtureLocator` owns only the modern generated-artifact layout, while historical schema-v2 discovery is owned by `HistoricalPublishedBundleTests` and the generation-aware integration locator.
+
+`bundle-integration-tests` checks out with submodules, installs SDK `10.0.111` for the test host and x64 shared runtimes for the net5/net6/net8/net10 FDD rows, downloads the same historical artifacts at the same root, runs `Generate-ModernFixtures.ps1 -Clean`, sets `DNSPY_BUNDLE_FIXTURES` to the historical common root plus the modern `Net10/artifacts/net10.0` root, and executes exactly. The .NET Core 3.1 row is self-contained and must execute with shared-framework lookup disabled for that child process, proving the rebuilt v1 SCD is actually self-contained.
+
+```powershell
+dotnet test Tests\dnSpy.Bundles.IntegrationTests\dnSpy.Bundles.IntegrationTests.csproj `
+  -c Release -f net10.0-windows --no-restore `
+  --filter 'FullyQualifiedName~BundleLogicalEquivalenceTests|FullyQualifiedName~OrdinaryOpenSaveRegressionTests|FullyQualifiedName~IntegrationFixtureLocatorTests|FullyQualifiedName~BundleExecutionEndToEndTests|FullyQualifiedName~OrdinaryEndToEndRegressionTests' `
+  --logger 'trx;LogFileName=bundle-integration.trx'
+```
+
+The job performs an explicit restore before the command and uploads TRX plus the test result/diagnostic directory on `always()`. Artifact download must retain generation directories; the job validates exact sidecar paths before tests.
+
+The integration job's setup list is exactly `5.0.408`, `6.0.428`, `8.0.419`, and `10.0.111`; the installed SDKs provide the x64 shared runtimes required by FDD execution. For every SCD child process the harness sets `DOTNET_MULTILEVEL_LOOKUP=0` and points `DOTNET_ROOT`/`DOTNET_ROOT_X64` at an existing empty test directory; an SCD result that depends on an installed shared framework therefore fails. Tests launch the rebuilt `.exe` directly with an empty test-controlled working directory and no shell. Exit, timeout, stdout, and stderr diagnostics name the generation and variant.
+
+Acceptance: every advertised rebuild/runtime row, including .NET Core 3.1 v1 SCD, has source-output, rebuilt-output, exit-code, timeout, and source-hash evidence; CI runs the complete portable core suite, Windows integration filters, and all four existing build modes. A fresh GitHub Actions run at the exact BND-028 candidate SHA succeeds under the exact remote contract below, and its run ID/URL/SHA/job conclusions are recorded in the BND-028 ledger row. R2R editing, NativeAOT editing, non-x64 rebuild, ELF rebuild, and Mach-O rebuild remain explicitly unsupported and are not silently skipped matrix rows.
 
 ### Dependency graph
 
@@ -914,7 +1035,11 @@ PR-01 specification
   -> 020 -> 021 -> 022 -> 023 -> 024 -> 025 -> 026 -> 027 -> 028
 ```
 
+The remaining-work sequence has an additional prerequisite: CI-001 -> CI-002 from `docs/specs/ci-completion.md` must be approved before BND-027. After BND-028, visible branding proceeds as NSPY-001 -> NSPY-002 -> NSPY-003 -> NSPY-004. This preserves the historical BND numbering while making the combined delivery order unambiguous.
+
 The arrows are mandatory execution order, not merely opportunities inferred from technical dependencies: after the approved PR-01 documentation commit, BND-001 through BND-028 execute strictly by number, with one focused Luna implementation, one independent review, and one approved local commit each. A ticket may mention an especially important earlier prerequisite, but that never permits skipping or parallelizing intervening numbers. Changing this sequence requires an explicit specification revision.
+
+This specification file is already modified coordinating work. Until specification review is approved, only the specification author/reviewer loop may edit or stage it. After approval, BND-027 and BND-028 may each stage only its own ledger-row update alongside ticket-owned implementation; CI-001, CI-002, and every NSPY ticket must leave this file byte-identical and unstaged. A CI or branding commit containing this file fails scope review.
 
 ## 10. Ticket status ledger
 
@@ -985,7 +1110,7 @@ Every row is mandatory before that ticket is reviewed. Test class names are cont
 | BND-024 | `dotnet test Tests/dnSpy.Bundles.Tests/dnSpy.Bundles.Tests.csproj -c Release -f net10.0 --filter FullyQualifiedName~WindowsBundleGenerationTests` | `dotnet test Tests/dnSpy.Bundles.Tests/dnSpy.Bundles.Tests.csproj -c Release -f net10.0 --filter FullyQualifiedName~HostModelParityTests` | `pwsh -NoProfile -File ./build.ps1` |
 | BND-025 | `dotnet test Tests/dnSpy.Bundles.Tests/dnSpy.Bundles.Tests.csproj -c Release -f net10.0 --filter FullyQualifiedName~BundlePublicationTests` | `dotnet test Tests/dnSpy.Bundles.Tests/dnSpy.Bundles.Tests.csproj -c Release -f net10.0 --filter FullyQualifiedName~SourceDestinationPreservationRegressionTests` | `pwsh -NoProfile -File ./build.ps1` |
 | BND-026 | `dotnet test Tests/dnSpy.Bundles.IntegrationTests/dnSpy.Bundles.IntegrationTests.csproj -c Release -f net10.0-windows --filter FullyQualifiedName~SaveBundleAsCommandTests` | `dotnet test Tests/dnSpy.Bundles.IntegrationTests/dnSpy.Bundles.IntegrationTests.csproj -c Release -f net10.0-windows --filter FullyQualifiedName~SaveModuleCommandRegressionTests` | `pwsh -NoProfile -File ./build.ps1` |
-| BND-027 | `dotnet test Tests/dnSpy.Bundles.IntegrationTests/dnSpy.Bundles.IntegrationTests.csproj -c Release -f net10.0-windows --filter FullyQualifiedName~BundleLogicalEquivalenceTests` | `dotnet test Tests/dnSpy.Bundles.IntegrationTests/dnSpy.Bundles.IntegrationTests.csproj -c Release -f net10.0-windows --filter FullyQualifiedName~OrdinaryOpenSaveRegressionTests` | `pwsh -NoProfile -File ./build.ps1` |
+| BND-027 | `dotnet test Tests/dnSpy.Bundles.IntegrationTests/dnSpy.Bundles.IntegrationTests.csproj -c Release -f net10.0-windows --filter 'FullyQualifiedName~BundleLogicalEquivalenceTests\|FullyQualifiedName~IntegrationFixtureLocatorTests'` | `dotnet test Tests/dnSpy.Bundles.IntegrationTests/dnSpy.Bundles.IntegrationTests.csproj -c Release -f net10.0-windows --filter FullyQualifiedName~OrdinaryOpenSaveRegressionTests` | `pwsh -NoProfile -File ./build.ps1` |
 | BND-028 | `dotnet test Tests/dnSpy.Bundles.IntegrationTests/dnSpy.Bundles.IntegrationTests.csproj -c Release -f net10.0-windows --filter FullyQualifiedName~BundleExecutionEndToEndTests` | `dotnet test Tests/dnSpy.Bundles.IntegrationTests/dnSpy.Bundles.IntegrationTests.csproj -c Release -f net10.0-windows --filter FullyQualifiedName~OrdinaryEndToEndRegressionTests` | `pwsh -NoProfile -File ./build.ps1 netframework && pwsh -NoProfile -File ./build.ps1 net && pwsh -NoProfile -File ./build.ps1 net-x86 && pwsh -NoProfile -File ./build.ps1 net-x64` |
 
 ## 11. Verification commands
@@ -1104,6 +1229,57 @@ Equivalently, the final integration run may use:
 ```
 
 `-NoMsbuild` is a secondary developer path, not a replacement for the normal CI/MSBuild gate. On this Linux host, the maximum valid subset is the core/test/HostModel net10 commands in section 11.1; absence of PowerShell and Windows WPF/runtime execution is the exact blocker for the full build.
+
+### 11.4 Required remote acceptance for BND-028
+
+After the reviewed BND-028 candidate commit is present on an authorized remote ref, dispatch `.github/workflows/build.yml` and validate the exact SHA and canonical job names:
+
+```powershell
+$repo = 'RestitvtorOrbis/netspy'
+$candidateRef = '<authorized-branch-or-tag-name>'
+$candidateSha = '<40-character-BND-028-commit-sha>'
+gh workflow run build.yml --repo $repo --ref $candidateRef
+
+$run = $null
+$deadline = [DateTime]::UtcNow.AddMinutes(2)
+do {
+  $runs = @(gh run list --repo $repo --workflow build.yml --event workflow_dispatch `
+    --commit $candidateSha --limit 10 --json databaseId,headSha,url | ConvertFrom-Json)
+  $run = $runs | Where-Object headSha -eq $candidateSha | Select-Object -First 1
+  if ($null -eq $run) { Start-Sleep -Seconds 3 }
+} while ($null -eq $run -and [DateTime]::UtcNow -lt $deadline)
+if ($null -eq $run) { throw "No workflow_dispatch run appeared for $candidateSha" }
+
+gh run watch $run.databaseId --repo $repo --exit-status
+$result = gh run view $run.databaseId --repo $repo `
+  --json headSha,conclusion,jobs,url | ConvertFrom-Json
+if ($result.headSha -ne $candidateSha) { throw "Run used $($result.headSha), expected $candidateSha" }
+if ($result.conclusion -ne 'success') { throw "Run conclusion: $($result.conclusion)" }
+
+$requiredJobs = @(
+  'Build (netframework)',
+  'Build (net)',
+  'Build (net-x86)',
+  'Build (net-x64)',
+  'Historical bundle fixtures (NetCoreApp31)',
+  'Historical bundle fixtures (Net5)',
+  'Historical bundle fixtures (Net6)',
+  'Historical bundle fixtures (Net8)',
+  'Historical bundle fixtures (Net10)',
+  'Historical bundle parser tests',
+  'Bundle portable core tests',
+  'Bundle Windows integration tests'
+)
+foreach ($name in $requiredJobs) {
+  $matches = @($result.jobs | Where-Object name -eq $name)
+  if ($matches.Count -ne 1) { throw "Expected exactly one required job '$name'; found $($matches.Count)" }
+  if ($matches[0].conclusion -ne 'success') { throw "Required job '$name': $($matches[0].conclusion)" }
+}
+```
+
+Workflow job IDs are respectively `build` (four matrix instances), `historical-bundle-fixtures` (five matrix instances), `historical-bundle-tests`, `bundle-core-tests`, and `bundle-integration-tests`. Dependencies are exact: `historical-bundle-tests.needs = historical-bundle-fixtures`, `bundle-core-tests.needs = historical-bundle-fixtures`, and `bundle-integration-tests.needs = [build, historical-bundle-fixtures, historical-bundle-tests, bundle-core-tests]`. The workflow must retain `strategy.fail-fast: false` for both matrices so every required conclusion is produced.
+
+Record run ID, URL, head SHA, and all twelve conclusions in the BND-028 ledger row. A local Windows run, a rerun of an older SHA, a differently named/missing job, or a run with skipped/cancelled required jobs is not final acceptance.
 
 ## 12. Final acceptance criteria
 
