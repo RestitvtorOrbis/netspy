@@ -23,6 +23,8 @@ Run `33673455945` used commit `73faa5808` on Windows Server 2025 and produced th
 
 Net6 and Net8 fixture jobs passed. The NetCoreApp31/Net5 failures skipped artifact upload; the downstream parser job was therefore correctly skipped. `Build (net-x86)`, `Build (net-x64)`, and `Build (netframework)` were cancelled by matrix fail-fast after `Build (net)` failed, so they are unproven rather than known-good.
 
+CI-001 implementation verification exposed the same global-property hazard inside fixture restore: `dotnet restore App.csproj ... -p:TargetFramework=net10.0` propagated `net10.0` into the referenced single-target `SingleFile.Dependency.csproj`, whose declared target is `netstandard2.0`, and the subsequent build failed with `NETSDK1005`. Every generation `App.csproj` is already single-targeted and every generation directory has an exact adjacent `global.json`; therefore the fixture phase contract must not pass any target-framework selector to restore, build, or publish. The app selects its own declared `TargetFramework`, while normal ProjectReference negotiation preserves `SingleFile.Dependency` as `netstandard2.0`.
+
 The worktree also contains pre-existing work which these CI tickets must preserve:
 
 | Path | Classification | Ownership rule |
@@ -41,10 +43,12 @@ The worktree also contains pre-existing work which these CI tickets must preserv
 For every historical and modern variant, generation uses three explicit phases with identical semantic properties:
 
 1. `dotnet restore <App.csproj> --runtime win-x64` plus `SelfContained`, `SingleFileFixtureRoot`, `PublishSingleFile`, symbol/compression/compatibility flags, deterministic flags, and the generation's isolated intermediate/output paths.
-2. `dotnet build ... --no-restore` with the same TFM, RID, `SelfContained`, and properties.
-3. `dotnet publish ... --no-build --no-restore` with the same TFM, RID, `SelfContained`, properties, and explicit publish output.
+2. `dotnet build ... --no-restore` with the app's same declared TFM, RID, `SelfContained`, and properties, but no command-line TFM selector.
+3. `dotnet publish ... --no-build --no-restore` with the app's same declared TFM, RID, `SelfContained`, properties, and explicit publish output, but no command-line TFM selector.
 
 Use `-p:SelfContained=true|false` in all three phases; do not pass `--self-contained` to historical `dotnet build`. Keep each adjacent `global.json`, exact `dotnet --version` assertion, and per-variant output isolation. A missing runtime pack must fail during the explicit restore phase with the full restore command visible in logs.
+
+`TargetFramework` remains a required helper argument for diagnostics and sidecar consistency, but is never forwarded as `-p:TargetFramework`, `--framework`, or `-f`. This is safe and required because the five fixture app projects are single-targeted (`netcoreapp3.1`, `net5.0`, `net6.0`, `net8.0`, and `net10.0`). The generators continue to supply the expected value and later assert the generated manifest/sidecar generation. Adding a multi-target fixture project requires a new non-global selection design and a specification revision; it must not reintroduce a global `TargetFramework` property.
 
 The same phase helper/argument construction must be used by `Generate-HistoricalFixtures.ps1` and `Generate-ModernFixtures.ps1` where their contracts overlap. Do not add SDK-version string branching when one MSBuild property works across all five SDKs.
 
@@ -139,15 +143,15 @@ function Invoke-SingleFileFixturePhases {
 }
 ```
 
-The function validates absolute project/publish paths, converts `$SelfContained` to lowercase once, rejects caller-supplied `SelfContained`, `TargetFramework`, `RuntimeIdentifier`, `OutputPath`, `NoBuild`, or `NoRestore` duplicates in `$MSBuildProperties`, and invokes exactly:
+The function validates absolute project/publish paths, converts `$SelfContained` to lowercase once, rejects caller-supplied `SelfContained`, `TargetFramework`, `TargetFrameworks`, `RuntimeIdentifier`, `OutputPath`, `NoBuild`, or `NoRestore` duplicates in `$MSBuildProperties`, and invokes exactly:
 
 ```text
-dotnet restore <project> --nologo --runtime <rid> -p:TargetFramework=<tfm> -p:SelfContained=<value> <properties>
-dotnet build   <project> --nologo --configuration Release --framework <tfm> --runtime <rid> --no-restore -p:SelfContained=<value> <properties>
-dotnet publish <project> --nologo --configuration Release --framework <tfm> --runtime <rid> --output <publishRoot> --no-build --no-restore -p:SelfContained=<value> <properties>
+dotnet restore <project> --nologo --runtime <rid> -p:SelfContained=<value> <properties>
+dotnet build   <project> --nologo --configuration Release --runtime <rid> --no-restore -p:SelfContained=<value> <properties>
+dotnet publish <project> --nologo --configuration Release --runtime <rid> --output <publishRoot> --no-build --no-restore -p:SelfContained=<value> <properties>
 ```
 
-It throws on any nonzero exit code and includes phase, project, TFM, RID, and self-contained state in the error. Both generators dot-source this file relative to `$PSScriptRoot` and call the function once per isolated variant. They retain SDK selection, safe cleanup, metadata/sidecar generation, and manifest assertions; they no longer own independent restore/build/publish argument construction. No function mutates global location or environment state.
+No command contains `-p:TargetFramework`, `-p:TargetFrameworks`, `--framework`, or `-f`. `TargetFramework` is diagnostic metadata only. The helper throws on any nonzero exit code and includes phase, project, expected TFM, RID, and self-contained state in the error. Both generators dot-source this file relative to `$PSScriptRoot` and call the function once per isolated variant. They retain SDK selection, safe cleanup, metadata/sidecar generation, and manifest assertions; they no longer own independent restore/build/publish argument construction. No function mutates global location or environment state.
 
 Each phase receives the complete property set; it must not rely on an earlier variant leaving a compatible `obj/project.assets.json`. `SingleFileFixtureRoot` remains variant-specific, which makes each restore graph independent.
 
@@ -208,8 +212,10 @@ Acceptance:
 - All five pinned SDK generations use explicit restore/build/publish with identical RID/self-contained/publish properties.
 - NetCoreApp31 and Net5 never receive `dotnet build --self-contained`.
 - Net10 obtains `Microsoft.NETCore.App.Runtime.win-x64` during restore and publishes with both `--no-build` and `--no-restore`.
-- A focused Pester-free PowerShell contract check dot-sources the helper, places an injected `dotnet` shim in a test-created temporary directory prepended to `PATH`, invokes the helper, and asserts the three ordered invocations and identical semantic properties without writing source paths. It also asserts both generators dot-source the common file, call `Invoke-SingleFileFixturePhases`, and contain no direct `dotnet restore`, `dotnet build`, or `dotnet publish` invocation. It restores `PATH` in `finally` and removes only its validated temporary directory. The check lives in `Tests/TestAssets/SingleFile/Test-FixtureGenerationCommon.ps1`.
+- No phase forwards `TargetFramework`/`TargetFrameworks` globally or uses a CLI framework selector; real output proves the app uses its declared TFM and the dependency builds/restores as `netstandard2.0`.
+- A focused Pester-free PowerShell contract check dot-sources the helper, places an injected `dotnet` shim in a test-created temporary directory prepended to `PATH`, invokes the helper, and asserts the three ordered invocations, exact arguments above, absence of every framework selector, and identical RID/self-contained/publish properties without writing source paths. It also asserts `TargetFrameworks` is reserved, both generators dot-source the common file, call `Invoke-SingleFileFixturePhases`, and contain no direct `dotnet restore`, `dotnet build`, or `dotnet publish` invocation. It restores `PATH` in `finally` and removes only its validated temporary directory. The check lives in `Tests/TestAssets/SingleFile/Test-FixtureGenerationCommon.ps1`.
 - Existing manifest, flags, inventory, hash, FDD/SCD, compression, and PDB assertions remain unchanged and pass.
+- The real Net10 generator (not only the dotnet shim) succeeds from a clean variant root. Its representative FDD `obj/App/project.assets.json` contains a `net10.0/win-x64` target. The dependency assets contain exactly the NuGet target keys `.NETStandard,Version=v2.0` and `.NETStandard,Version=v2.0/win-x64`, and no `net10.0`/`.NETCoreApp,Version=v10.0` target. The targeted existing `ModernPublishedBundleTests` parser test proves the generated inventory contains both `SingleFile.App.dll` and `SingleFile.Dependency.dll` as assembly entries and that their logical bytes equal the corresponding build outputs.
 - No generated binary is staged.
 
 ### CI-002 — Isolate solution restore and prove the complete baseline workflow
@@ -234,7 +240,7 @@ Acceptance:
 
 | Ticket | Status | Commit | Evidence / notes |
 |---|---|---|---|
-| CI-001 | pending | — | — |
+| CI-001 | approved | `fix(CI-001): make fixture generation restore-complete` | Shared three-phase helper contract passes; all five clean Net10 variants generate; App assets contain `net10.0` and `net10.0/win-x64`; dependency assets contain exactly `.NETStandard,Version=v2.0` and `.NETStandard,Version=v2.0/win-x64`; `ModernPublishedBundleTests` pass 3/3 and verify both managed entries/logical bytes; PowerShell parsing and `git diff --check` pass. Historical SDK execution remains delegated to the Windows matrix because only SDK 10.0.111 is installed locally. |
 | CI-002 | pending | — | Must include a fresh GitHub run ID/URL/SHA and all required job conclusions |
 
 ## 9. Exact verification
@@ -250,8 +256,38 @@ pwsh -NoProfile -File .\Tests\TestAssets\SingleFile\Generate-HistoricalFixtures.
 pwsh -NoProfile -File .\Tests\TestAssets\SingleFile\Generate-ModernFixtures.ps1 -Clean
 pwsh -NoProfile -File .\Tests\TestAssets\SingleFile\Test-FixtureGenerationCommon.ps1
 
-dotnet test Tests\dnSpy.Bundles.Tests\dnSpy.Bundles.Tests.csproj `
-  -c Release -f net10.0 --filter 'FullyQualifiedName~HistoricalPublishedBundleTests|FullyQualifiedName~ModernPublishedBundleTests'
+$variantRoot = Resolve-Path '.\Tests\TestAssets\SingleFile\Net10\artifacts\net10.0\fdd-uncompressed'
+$appAssets = Get-Content (Join-Path $variantRoot 'obj\App\project.assets.json') -Raw | ConvertFrom-Json -AsHashtable
+$dependencyAssets = Get-Content (Join-Path $variantRoot 'obj\SingleFile.Dependency\project.assets.json') -Raw | ConvertFrom-Json -AsHashtable
+$appFrameworks = @($appAssets.project.frameworks.Keys)
+$dependencyFrameworks = @($dependencyAssets.project.frameworks.Keys)
+if ($appFrameworks.Count -ne 1 -or $appFrameworks[0] -cne 'net10.0' -or
+    -not @($appAssets.targets.Keys).Where({ $_ -ceq 'net10.0/win-x64' })) {
+  throw 'App restore did not produce net10.0/win-x64 assets'
+}
+if ($dependencyFrameworks.Count -ne 1 -or $dependencyFrameworks[0] -cne 'netstandard2.0' -or
+    @(Compare-Object `
+      @('.NETStandard,Version=v2.0', '.NETStandard,Version=v2.0/win-x64') `
+      @($dependencyAssets.targets.Keys)).Count -ne 0) {
+  throw 'Dependency restore did not preserve netstandard2.0'
+}
+if (@($dependencyAssets.targets.Keys).Where({
+      $_ -match 'net10\.0|\.NETCoreApp,Version=v10\.0'
+    })) {
+  throw 'App TFM contaminated the dependency restore graph'
+}
+
+$project = 'Tests\dnSpy.Bundles.Tests\dnSpy.Bundles.Tests.csproj'
+$env:DNSPY_BUNDLE_FIXTURES = (Resolve-Path '.\Tests\TestAssets\SingleFile\Net10\artifacts\net10.0').Path
+dotnet test $project `
+  -c Release -f net10.0 --filter 'FullyQualifiedName~ModernPublishedBundleTests'
+if ($LASTEXITCODE -ne 0) { throw 'Modern parser/inventory assertion failed' }
+
+$env:DNSPY_BUNDLE_FIXTURES = (Resolve-Path '.\Tests\TestAssets\SingleFile\artifacts\historical').Path
+dotnet test $project -c Release -f net10.0 `
+  --filter 'FullyQualifiedName~HistoricalPublishedBundleTests'
+if ($LASTEXITCODE -ne 0) { throw 'Historical parser matrix failed' }
+Remove-Item Env:DNSPY_BUNDLE_FIXTURES -ErrorAction SilentlyContinue
 
 pwsh -NoProfile -File .\build.ps1 netframework
 pwsh -NoProfile -File .\build.ps1 net

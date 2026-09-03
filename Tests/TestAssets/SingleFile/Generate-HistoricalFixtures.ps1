@@ -8,6 +8,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot 'FixtureGeneration.Common.ps1')
+
 $generations = [ordered]@{
     NetCoreApp31 = [pscustomobject]@{
         SdkVersion = '3.1.426'; TargetFramework = 'netcoreapp3.1'; ManifestMajorVersion = 1
@@ -87,13 +89,6 @@ function Test-NoReparsePath([string] $Path) {
 
 Test-NoReparsePath $scriptRoot
 Test-NoReparsePath $OutputRoot
-
-function Invoke-Dotnet([string[]] $Arguments) {
-    & dotnet @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "dotnet $($Arguments -join ' ') failed with exit code $LASTEXITCODE"
-    }
-}
 
 function Get-RelativePath([string] $Root, [string] $Path) {
     return [IO.Path]::GetRelativePath($Root, $Path).Replace('\', '/')
@@ -349,20 +344,14 @@ foreach ($generationName in $selectedNames) {
                 $properties += '-p:IncludeAllContentForSelfExtract=true'
             }
 
-            $buildArguments = @(
-                'build', $projectPath, '--nologo', '--configuration', 'Release',
-                '--framework', $generationInfo.TargetFramework, '--runtime', 'win-x64',
-                '--self-contained', $variant.SelfContained.ToString().ToLowerInvariant()
-            ) + $properties
-            Invoke-Dotnet $buildArguments
-
-            $publishArguments = @(
-                'publish', $projectPath, '--nologo', '--configuration', 'Release',
-                '--framework', $generationInfo.TargetFramework, '--runtime', 'win-x64',
-                '--self-contained', $variant.SelfContained.ToString().ToLowerInvariant(),
-                '--output', $publishRoot, '--no-build'
-            ) + $properties
-            Invoke-Dotnet $publishArguments
+            Write-Host "Generating $generationName/$($variant.Name) with SDK $($generationInfo.SdkVersion), TFM $($generationInfo.TargetFramework), RID win-x64, SelfContained $($variant.SelfContained.ToString().ToLowerInvariant())."
+            Invoke-SingleFileFixturePhases `
+                -ProjectPath $projectPath `
+                -TargetFramework $generationInfo.TargetFramework `
+                -RuntimeIdentifier 'win-x64' `
+                -SelfContained ([bool]$variant.SelfContained) `
+                -PublishRoot $publishRoot `
+                -MSBuildProperties $properties
 
             $bundlePath = Get-RequiredSingleFile $publishRoot '*.exe' 'published bundle'
             $buildRoot = Join-Path $variantRoot 'build'
