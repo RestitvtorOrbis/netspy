@@ -259,8 +259,8 @@ Acceptance:
 | Ticket | Status | Commit | Evidence / notes |
 |---|---|---|---|
 | CI-001 | approved | `fix(CI-001): make fixture generation restore-complete` | Shared three-phase helper contract passes; all five clean Net10 variants generate; App assets contain `net10.0` and `net10.0/win-x64`; dependency assets contain exactly `.NETStandard,Version=v2.0` and `.NETStandard,Version=v2.0/win-x64`; `ModernPublishedBundleTests` pass 3/3 and verify both managed entries/logical bytes; PowerShell parsing and `git diff --check` pass. Historical SDK execution remains delegated to the Windows matrix because only SDK 10.0.111 is installed locally. |
-| CI-002 | pending | — | Implementation ticket; after local approval its commit records scoped evidence and delegates exact-SHA remote acceptance to CI-003. |
-| CI-003 | blocked by CI-002 | — | Documentation-only remote acceptance ticket; must record the fresh run ID, URL, CI-002 head SHA, and all ten required job conclusions. |
+| CI-002 | approved | `fix(CI-002): isolate product graph restore` | Framework-neutral solution restore is separated from restore-free selected-TFM product builds/publishes; all three application roots and eleven shipped extension roots are explicit, with `dnSpy-x86` omitted only from RID-selected self-contained publication. PowerShell parsing/root-contract checks and `git diff --check` pass. Locked HostModel restore exits 0, leaves the lock hash unchanged, retains only `.NETFramework,Version=v4.8` and `net10.0`, and contains no `net10.0-windows7.0`. The authoritative Windows product modes remain unavailable locally; independent review approved the implementation. Remote acceptance is pending CI-003. |
+| CI-003 | blocked by push authorization | — | Documentation-only remote acceptance ticket; must record the fresh run ID, URL, CI-002 head SHA, and all ten required job conclusions. |
 
 ## 9. Exact verification
 

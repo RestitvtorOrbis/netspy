@@ -19,21 +19,34 @@ jobs:
         run:
           shell: pwsh
     strategy:
+      fail-fast: false
       matrix:
         platform: [netframework, net, net-x86, net-x64]
         include:
           - platform: netframework
             package-name: netframework
             build-dir: net48
+            target-framework: net48
+            runtime-identifier: ''
+            self-contained: 'false'
           - platform: net
             package-name: net
             build-dir: net10.0-windows
+            target-framework: net10.0-windows
+            runtime-identifier: ''
+            self-contained: 'false'
           - platform: net-x86
             package-name: net-win32
             build-dir: net10.0-windows\win-x86\publish
+            target-framework: net10.0-windows
+            runtime-identifier: win-x86
+            self-contained: 'true'
           - platform: net-x64
             package-name: net-win64
             build-dir: net10.0-windows\win-x64\publish
+            target-framework: net10.0-windows
+            runtime-identifier: win-x64
+            self-contained: 'true'
 
     steps:
       - uses: actions/checkout@v7.0.1
@@ -47,12 +60,25 @@ jobs:
 
       - uses: microsoft/setup-msbuild@v3.0.0
 
+      - name: Assert selected product build
+        run: |
+          $sdk = (& dotnet --version).Trim()
+          $tfm = '${{ matrix.target-framework }}'
+          $rid = '${{ matrix.runtime-identifier }}'
+          $selfContained = '${{ matrix.self-contained }}'
+          if ([string]::IsNullOrWhiteSpace($sdk)) { throw 'The selected .NET SDK did not report a version.' }
+          if ([string]::IsNullOrWhiteSpace($tfm)) { throw 'The product target framework is missing.' }
+          if ([string]::IsNullOrWhiteSpace($selfContained)) { throw 'The product self-contained state is missing.' }
+          Write-Host "Selected SDK: $sdk"
+          Write-Host "Selected TFM: $tfm"
+          Write-Host "Selected RID: $(if ($rid) { $rid } else { '(none)' })"
+          Write-Host "Self-contained: $selfContained"
+
       - name: Build dnSpy (${{matrix.platform}})
         run: .\build.ps1 ${{matrix.platform}}
 
       - name: Create output directory
         run: New-Item -ItemType Directory -Path C:\builtfiles\dnSpy-${{matrix.platform}} -Force > $null
-        continue-on-error: true
 
       - name:  Copy release files for upload
         run: Copy-Item -Path dnSpy\dnSpy\bin\Release\${{matrix.build-dir}}\* -Destination C:\builtfiles\dnSpy-${{matrix.platform}} -Recurse
@@ -77,14 +103,29 @@ jobs:
         include:
           - generation: NetCoreApp31
             sdk: 3.1.426
+            target-framework: netcoreapp3.1
+            runtime-identifier: win-x64
+            self-contained: 'false,true'
           - generation: Net5
             sdk: 5.0.408
+            target-framework: net5.0
+            runtime-identifier: win-x64
+            self-contained: 'false,true'
           - generation: Net6
             sdk: 6.0.428
+            target-framework: net6.0
+            runtime-identifier: win-x64
+            self-contained: 'false,true'
           - generation: Net8
             sdk: 8.0.419
+            target-framework: net8.0
+            runtime-identifier: win-x64
+            self-contained: 'true'
           - generation: Net10
             sdk: 10.0.111
+            target-framework: net10.0
+            runtime-identifier: win-x64
+            self-contained: 'false,true'
 
     steps:
       - uses: actions/checkout@v7.0.1
@@ -95,6 +136,22 @@ jobs:
         uses: actions/setup-dotnet@v6.0.0
         with:
           dotnet-version: ${{ matrix.sdk }}
+
+      - name: Assert selected historical fixture build
+        run: |
+          $expectedSdk = '${{ matrix.sdk }}'
+          $sdk = (& dotnet --version).Trim()
+          $tfm = '${{ matrix.target-framework }}'
+          $rid = '${{ matrix.runtime-identifier }}'
+          $selfContained = '${{ matrix.self-contained }}'
+          if ($sdk -ne $expectedSdk) { throw "Expected SDK $expectedSdk, but selected SDK is $sdk." }
+          if ([string]::IsNullOrWhiteSpace($tfm)) { throw 'The historical fixture target framework is missing.' }
+          if ([string]::IsNullOrWhiteSpace($rid)) { throw 'The historical fixture runtime identifier is missing.' }
+          if ([string]::IsNullOrWhiteSpace($selfContained)) { throw 'The historical fixture self-contained state is missing.' }
+          Write-Host "Selected SDK: $sdk"
+          Write-Host "Selected TFM: $tfm"
+          Write-Host "Selected RID: $rid"
+          Write-Host "Self-contained variants: $selfContained"
 
       - name: Generate required artifacts with pinned SDK
         run: |
@@ -163,6 +220,15 @@ jobs:
               throw "Required historical fixture output is missing: $generation"
             }
           }
+
+      - name: Assert selected modern fixture build
+        run: |
+          $sdk = (& dotnet --version).Trim()
+          if ($sdk -ne '10.0.111') { throw "Expected SDK 10.0.111, but selected SDK is $sdk." }
+          Write-Host "Selected SDK: $sdk"
+          Write-Host 'Selected TFM: net10.0'
+          Write-Host 'Selected RID: win-x64'
+          Write-Host 'Self-contained variants: false,true'
 
       - name: Generate modern regression fixtures
         run: .\Tests\TestAssets\SingleFile\Generate-ModernFixtures.ps1
