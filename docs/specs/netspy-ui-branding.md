@@ -438,7 +438,7 @@ Acceptance:
 
 | Ticket | Status | Commit | Evidence / notes |
 |---|---|---|---|
-| NSPY-001 | pending | — | — |
+| NSPY-001 | approved | `feat(NSPY-001): separate visible application identity` | All nine owned title/metadata files independently reviewed; visible captions and window discovery use `AppName`, while `DnSpy`, `DnSpyFile`, the copy-data header, assembly name, launchers, and persisted identities remain unchanged. The exact `net10.0-windows --no-restore` product build passes with 0 warnings/errors; source invariants, protected BND-027 hashes, and `git diff --check` pass. |
 | NSPY-002 | pending | — | — |
 | NSPY-003 | pending | — | — |
 | NSPY-004 | pending | — | — |

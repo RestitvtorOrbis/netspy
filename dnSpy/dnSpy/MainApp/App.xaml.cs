@@ -76,7 +76,7 @@ namespace dnSpy.MainApp {
 
 		static void ShowException(Exception? ex) {
 			string msg = ex?.ToString() ?? "Unknown exception";
-			MessageBox.Show(msg, Constants.DnSpy, MessageBoxButton.OK, MessageBoxImage.Error);
+			MessageBox.Show(msg, Constants.AppName, MessageBoxButton.OK, MessageBoxImage.Error);
 		}
 
 		readonly ResourceManagerTokenCacheImpl resourceManagerTokenCacheImpl;
@@ -438,7 +438,7 @@ namespace dnSpy.MainApp {
 		unsafe bool EnumWindowsHandler(IntPtr hWnd, IntPtr lParam) {
 			var sb = new StringBuilder(256);
 			GetWindowText(hWnd, sb, sb.Capacity);
-			if (sb.ToString().StartsWith(Constants.DnSpy + " ", StringComparison.Ordinal)) {
+			if (sb.ToString().StartsWith(Constants.AppName + " ", StringComparison.Ordinal)) {
 				var args = Environment.GetCommandLineArgs();
 				args[0] = COPYDATASTRUCT_HEADER;
 				var msg = string.Join(Environment.NewLine, args);

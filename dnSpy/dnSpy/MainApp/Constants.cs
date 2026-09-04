@@ -23,6 +23,7 @@ using System.Security.Principal;
 
 namespace dnSpy.MainApp {
 	static class Constants {
+		public const string AppName = "netSpy";
 		public const string DnSpy = "dnSpy";
 		// Used in filenames so must only have valid filename chars
 		public const string DnSpyFile = DnSpy;

@@ -6,6 +6,10 @@
     <Copyright>$(DnSpyAssemblyCopyright)</Copyright>
     <Version>$(DnSpyAssemblyVersion)</Version>
     <InformationalVersion>$(DnSpyAssemblyInformationalVersion)</InformationalVersion>
+    <AssemblyTitle>netSpy</AssemblyTitle>
+    <Product>netSpy</Product>
+    <Company>netSpy contributors</Company>
+    <Description>netSpy .NET assembly editor, debugger, and single-file bundle explorer</Description>
 
     <SignAssembly>True</SignAssembly>
     <AssemblyOriginatorKeyFile>..\..\dnSpy.snk</AssemblyOriginatorKeyFile>

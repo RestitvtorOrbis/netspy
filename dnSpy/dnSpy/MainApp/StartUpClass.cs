@@ -65,7 +65,7 @@ namespace dnSpy.MainApp {
 		static bool AskReadSettings() {
 			bool readSettings;
 			// Need to use DefaultDesktopOnly or the dlg box is shown in the background...
-			var res = MessageBox.Show(dnSpy_Resources.AskReadSettings, Constants.DnSpy, MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.Yes, MessageBoxOptions.DefaultDesktopOnly);
+			var res = MessageBox.Show(dnSpy_Resources.AskReadSettings, Constants.AppName, MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.Yes, MessageBoxOptions.DefaultDesktopOnly);
 			readSettings = res != MessageBoxResult.No;
 			return readSettings;
 		}

@@ -25,7 +25,7 @@
         xmlns:ds="clr-namespace:dnSpy.MainApp"
         Style="{StaticResource MainWindowStyle}"
         SystemMenuImage="{x:Static img:DsImages.Assembly}"
-        Title="{x:Static ds:Constants.DnSpy}"
+        Title="{x:Static ds:Constants.AppName}"
         MinWidth="250"
         MinHeight="200"
         Height="600" Width="1000">

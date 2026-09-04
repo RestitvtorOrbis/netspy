@@ -56,7 +56,7 @@ namespace dnSpy.Documents {
 					Load(f);
 			}
 			else
-				ProgressDlg.Show(this, MainApp.Constants.DnSpy, ownerWindow);
+				ProgressDlg.Show(this, MainApp.Constants.AppName, ownerWindow);
 
 			return loadedDocuments.ToArray();
 		}

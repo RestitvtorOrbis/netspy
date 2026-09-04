@@ -27,7 +27,7 @@
         ResizeMode="NoResize"
         SizeToContent="Height"
         Style="{StaticResource DialogWindowStyle}" WindowStartupLocation="CenterOwner"
-        Title="{x:Static ds:Constants.DnSpy}" Width="300">
+        Title="{x:Static ds:Constants.AppName}" Width="300">
     <Grid FocusManager.FocusedElement="{Binding ElementName=textBox}">
         <Grid.Resources>
             <mvvmvc:NegateBooleanConverter x:Key="NegateBooleanConverter" />
