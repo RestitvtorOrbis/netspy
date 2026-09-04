@@ -5336,7 +5336,7 @@
     <Style x:Key="{x:Type ctrls2:MetroWindow}" TargetType="{x:Type ctrls2:MetroWindow}">
         <Setter Property="UseLayoutRounding" Value="True"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
-        <Setter Property="Icon" Value="../Images/dnSpy.ico"/>
+        <Setter Property="Icon" Value="../Images/netSpy.ico"/>
         <Setter Property="IsDebugging" Value="{DynamicResource IsDebuggingKey}" />
         <Setter Property="ctrls2:Windows11RoundedCorners.Type" Value="Regular" />
         <Setter Property="Template">
@@ -5373,7 +5373,14 @@
                                     Background="Transparent"
                                     VerticalAlignment="Center"
                                     Visibility="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=ShowMenuButton, Converter={StaticResource BooleanToVisibilityConverter}}" >
-                                    <img:DsImage ImageReference="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=SystemMenuImage}" />
+                                    <Grid Width="16" Height="16">
+                                        <Image x:Name="nativeSystemMenuImage"
+                                               Source="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=Icon}"
+                                               Stretch="Uniform"
+                                               Visibility="Collapsed" />
+                                        <img:DsImage x:Name="referencedSystemMenuImage"
+                                                     ImageReference="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=SystemMenuImage}" />
+                                    </Grid>
                                 </ctrls:SysMenuButton>
                                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" WindowChrome.IsHitTestVisibleInChrome="True">
                                     <ctrls:WinSysButton x:Name="minButton" WinSysType="Minimize" Visibility="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=ShowMinimizeButton, Converter={StaticResource BooleanToVisibilityConverter}}"
@@ -5405,6 +5412,10 @@
                         </Grid>
                     </Border>
                     <ControlTemplate.Triggers>
+                        <DataTrigger Binding="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=SystemMenuImage.IsDefault}" Value="True">
+                            <Setter TargetName="nativeSystemMenuImage" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="referencedSystemMenuImage" Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
                         <Trigger Property="IsActive" Value="False">
                             <Setter TargetName="sysMenuButton" Property="img:DsImage.BackgroundBrush" Value="{DynamicResource EnvironmentMainWindowInactiveCaption}" />
                         </Trigger>

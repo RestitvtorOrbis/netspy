@@ -31,7 +31,7 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <ApplicationIcon>..\dnSpy\Images\dnSpy-x86.ico</ApplicationIcon>
+    <ApplicationIcon>..\dnSpy\Images\netSpy.ico</ApplicationIcon>
     <ApplicationManifest>..\dnSpy\app.manifest</ApplicationManifest>
   </PropertyGroup>
 

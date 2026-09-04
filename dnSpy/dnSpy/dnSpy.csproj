@@ -34,7 +34,7 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <ApplicationIcon>Images\dnSpy.ico</ApplicationIcon>
+    <ApplicationIcon>Images\netSpy.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
@@ -42,12 +42,12 @@
     <!-- Use the x86 icon when publishing the .NET x86 build -->
     <When Condition="'$(RuntimeIdentifier)' == 'win-x86' And '$(IsDotNetFramework)' == 'false'">
       <PropertyGroup>
-        <ApplicationIcon>Images\dnSpy-x86.ico</ApplicationIcon>
+        <ApplicationIcon>Images\netSpy.ico</ApplicationIcon>
       </PropertyGroup>
     </When>
     <Otherwise>
       <PropertyGroup>
-        <ApplicationIcon>Images\dnSpy.ico</ApplicationIcon>
+        <ApplicationIcon>Images\netSpy.ico</ApplicationIcon>
       </PropertyGroup>
     </Otherwise>
   </Choose>
@@ -72,7 +72,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Resource Include="Images\dnSpy.ico" />
+    <Resource Include="Images\netSpy.ico" />
     <EmbeddedResource Include="LicenseInfo\CREDITS.txt" />
     <None Remove="app.config" Condition=" '$(IsDotNetFramework)' != 'true' " />
     <None Include="app.manifest" />

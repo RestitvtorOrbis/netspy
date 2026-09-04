@@ -27,6 +27,8 @@ using System.Reflection;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Automation;
+using System.Windows.Media;
 using dnSpy.Contracts.App;
 using dnSpy.Contracts.Decompiler;
 using dnSpy.Contracts.Documents.Tabs;
@@ -205,6 +207,14 @@ namespace dnSpy.MainApp {
 #else
 #error Unknown target framework
 #endif
+			output.AddUIElement(() => {
+				var mark = new BrandMark { Width = 64, Height = 64 };
+				AutomationProperties.SetName(mark, Constants.AppName);
+				return mark;
+			});
+			output.WriteLine();
+			output.AddUIElement(CreateBrandAccent);
+			output.WriteLine();
 			output.WriteLine($"{Constants.AppName} {appWindow.AssemblyInformationalVersion} ({frameworkName})", BoxedTextColor.Text);
 			output.WriteLine();
 			output.WriteLine(dnSpy_Resources.AboutScreen_Description, BoxedTextColor.Text);
@@ -232,6 +242,24 @@ namespace dnSpy.MainApp {
 			}
 			output.WriteLine();
 			WriteResourceFile(output, "dnSpy.LicenseInfo.CREDITS.txt");
+		}
+
+		static UIElement CreateBrandAccent() {
+			var brush = new LinearGradientBrush {
+				StartPoint = new Point(0, 0.5),
+				EndPoint = new Point(1, 0.5),
+			};
+			brush.GradientStops.Add(new GradientStop(Color.FromArgb(0xFF, 0x22, 0xD3, 0xEE), 0));
+			brush.GradientStops.Add(new GradientStop(Color.FromArgb(0xFF, 0xA7, 0x8B, 0xFA), 1));
+			var accent = new DecorativeAccent {
+				Width = 160,
+				Height = 2,
+				HorizontalAlignment = HorizontalAlignment.Center,
+				IsHitTestVisible = false,
+				Focusable = false,
+				Background = brush,
+			};
+			return accent;
 		}
 
 		async void OnUpdateButtonClick(object sender, RoutedEventArgs e) {

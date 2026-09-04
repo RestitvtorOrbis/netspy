@@ -164,10 +164,11 @@ Add an original, project-owned netSpy mark with this fixed visual language:
 
 Implementation assets:
 
-1. `MainApp/BrandMark.xaml` / `.xaml.cs`: a reusable, non-focusable WPF `UserControl` containing the vector geometry in a `Viewbox`. It must expose no public API and have an accessible automation name of `netSpy` when used in the loader.
+1. `MainApp/BrandMark.xaml` / `.xaml.cs`: a reusable, non-focusable WPF `UserControl` containing the vector geometry in a `Viewbox`. It must expose no public API and have an accessible automation name of `netSpy` when used in the loader. The already-owned code-behind also contains the narrow internal `DecorativeAccent` element and its private automation peer described below; do not add a new production file or contracts-assembly type for that helper.
 2. `Images/netSpy.ico`: an ICO derived from the same geometry and containing at least 16, 24, 32, 48, 64, and 256-pixel 32-bit variants. It replaces the app icon references in `dnSpy.csproj`, `dnSpy-x86.csproj`, and the default `MetroWindow` style. Both architectures use the same mark; architecture remains text in the title.
 3. `Branding/netSpy-logo.svg`: the human-reviewable vector source, with an SPDX `GPL-3.0-or-later` comment and the exact geometry/color constants above.
-4. `Branding/README.md`: state that the mark was created for netSpy, is not copied from dnSpy/dnSpyEx artwork, and is distributed under GPL-3.0-or-later with this repository. Document the command/tool and version used to export the checked-in ICO so it can be reproduced. Do not add a new build-time package solely for icon generation.
+4. `Branding/export-netspy-ico.py`: the deterministic maintainer-time exporter that produces `Images/netSpy.ico` from the fixed BR-5 geometry at the required frame sizes and bit depth. It must carry the repository's source copyright header and an `SPDX-License-Identifier: GPL-3.0-or-later` line, emit frames in a stable order without timestamps or nondeterministic metadata, and produce byte-identical output on repeated runs with the documented tool versions. It is not invoked by MSBuild and adds no product build-time package or dependency.
+5. `Branding/README.md`: state that the mark was created for netSpy, is not copied from dnSpy/dnSpyEx artwork, and is distributed under GPL-3.0-or-later with this repository. Document the exact Python invocation and Python/export-library versions used to run `export-netspy-ico.py`, plus its output path, so the checked-in ICO can be reproduced. Any exporter-only library remains a documented maintainer prerequisite and must not be added to product projects or the normal build.
 
 Use `BrandMark` in place of `DsImages.Assembly` in `DsLoaderControl.xaml`. Add the same 64-pixel mark above the textual header in `AboutScreen.Write()` using its existing `AddUIElement` mechanism. Do not replace generic assembly glyphs elsewhere: those glyphs communicate document types, not product identity.
 
@@ -175,7 +176,9 @@ Remove `MainWindow.xaml`'s explicit generic `SystemMenuImage="{x:Static img:DsIm
 
 Do not change the `MetroWindow.SystemMenuImage` dependency property, its default, `DsImage`, `ImageReference`, or the image service. Do not create a `DsImages.netSpy` member or register the brand mark as a document-type image. The template fallback is solely presentation wiring from the already-existing `Window.Icon`; generic assembly/file glyph semantics remain unchanged.
 
-Immediately below the mark on both loader and About, add a non-interactive 2-device-independent-pixel-high horizontal accent, at most 160 units wide, filled left-to-right from cyan `#FF22D3EE` to violet `#FFA78BFA`. It is decorative, excluded from keyboard focus and the accessibility tree, and must not replace dynamic theme brushes for text, controls, selection, or editor content. This is the complete color/appearance change outside the mark and icon.
+Immediately below the mark on both loader and About, add a non-interactive 2-device-independent-pixel-high horizontal accent, at most 160 units wide, filled left-to-right from cyan `#FF22D3EE` to violet `#FFA78BFA`. Both surfaces use the same internal `DecorativeAccent : Border` declared in `BrandMark.xaml.cs`, with `Focusable="False"` and `IsHitTestVisible="False"` set by XAML/object initialization. `DecorativeAccent.OnCreateAutomationPeer()` returns a private `FrameworkElementAutomationPeer` subclass whose `IsControlElementCore()` and `IsContentElementCore()` overrides both return `false`. This excludes the decoration from the UI Automation Control and Content views; it does not claim that the element is absent from the Raw view.
+
+The target WPF surface supports neither `AutomationProperties.IsInAccessibleTree` nor `AutomationProperties.AccessibilityView`/`AutomationProperties.SetAccessibilityView`; none may be used. Keep `DecorativeAccent` internal to the primary UI assembly and within the already-owned `BrandMark.xaml.cs`; do not add a public type, contracts change, attached property, or general automation abstraction. The accent must not replace dynamic theme brushes for text, controls, selection, or editor content. This is the complete color/appearance change outside the mark and icon.
 
 High-contrast behavior: the mark's opaque background, cyan trace, and outlined nodes are intentionally self-contained and must retain at least 3:1 non-text contrast within the mark. The surrounding About/loader text continues using current dynamic theme resources. Do not alter `.dntheme` files or global color definitions.
 
@@ -269,6 +272,7 @@ Add `Tests/dnSpy.Bundles.IntegrationTests/BrandingTests.cs` with focused tests t
 - neutral resources used by loader, Explorer, restart, About title/license/description/attribution, and upstream update messages contain the intended name/context;
 - the legacy copy-data header remains tied to `Constants.DnSpy` while the window-title discovery is tied to `Constants.AppName`. If reflection cannot observe constants embedded by the compiler, implement this as a test that reads only the two relevant source files from a repository root resolved relative to the test assembly; do not add a production API solely for testing.
 - source invariants prove `MainWindow.xaml` no longer assigns `DsImages.Assembly` to `SystemMenuImage`, and the common template contains both the non-default `SystemMenuImage`/`DsImage` path and the default-reference `Window.Icon` fallback. This is a structural source test, not a pixel or exact-template snapshot.
+- source invariants prove both accents use the internal `DecorativeAccent`, its peer returns `false` from both `IsControlElementCore()` and `IsContentElementCore()`, and no branding source uses either unsupported `AutomationProperties.IsInAccessibleTree` or `AutomationProperties.AccessibilityView`/`SetAccessibilityView` API.
 
 Do not test exact ICO bytes or take pixel snapshots. The project build proves the ICO is valid enough for the Windows resource compiler; the smoke test proves its visible wiring.
 
@@ -389,6 +393,7 @@ Scope:
 Owned files:
 
 - `dnSpy/dnSpy/Branding/netSpy-logo.svg`
+- `dnSpy/dnSpy/Branding/export-netspy-ico.py`
 - `dnSpy/dnSpy/Branding/README.md`
 - `dnSpy/dnSpy/Images/netSpy.ico`
 - `dnSpy/dnSpy/MainApp/BrandMark.xaml`
@@ -405,8 +410,10 @@ Acceptance:
 - App/taskbar/native window icon, custom main-window caption, loader, and About share the new mark.
 - The custom caption obtains the mark from `Window.Icon` only when `SystemMenuImage` is the default reference. The NSPY-004 structural test verifies the mutually exclusive trigger, bindings, and `DsImage` precedence; the Windows smoke check verifies the rendered main-window result.
 - Loader and About contain only the bounded cyan-to-violet accent rule described by BR-5; no global theme color changes are introduced.
+- Both accent elements are non-focusable, ignore hit testing, and use the internal `DecorativeAccent` peer to stay out of UI Automation Control and Content views. Branding sources contain neither unsupported `AutomationProperties.IsInAccessibleTree` nor `AutomationProperties.AccessibilityView`/`SetAccessibilityView` usage, and the product build succeeds without XAML error `MC3072`.
 - The old icon is no longer referenced by desktop app/window builds but remains tracked for history/compatibility unless a separate cleanup is approved.
 - All required ICO sizes are present.
+- Running the documented `export-netspy-ico.py` command twice produces byte-identical ICO files matching the checked-in `Images/netSpy.ico`.
 - Mark geometry and colors match BR-5 and remain legible in dark, light, blue, and Windows high-contrast modes.
 - No third-party asset or additional build-time dependency is introduced.
 
@@ -440,7 +447,7 @@ Acceptance:
 |---|---|---|---|
 | NSPY-001 | approved | `feat(NSPY-001): separate visible application identity` | All nine owned title/metadata files independently reviewed; visible captions and window discovery use `AppName`, while `DnSpy`, `DnSpyFile`, the copy-data header, assembly name, launchers, and persisted identities remain unchanged. The exact `net10.0-windows --no-restore` product build passes with 0 warnings/errors; source invariants, protected BND-027 hashes, and `git diff --check` pass. |
 | NSPY-002 | approved | `feat(NSPY-002): clarify netSpy identity and provenance` | Neutral and all 14 enumerated satellite resources, deterministic designer members, About ordering/provenance, Explorer failure text, and upstream dnSpyEx update/link labels independently reviewed. Existing URLs, update behavior, translated surrounding text, loaded-file list, GPL content, and credits remain intact. The exact product build passes with 0 warnings/errors; protected hashes and `git diff --check` pass. |
-| NSPY-003 | pending | — | — |
+| NSPY-003 | approved | `feat(NSPY-003): add original netSpy visual identity` | Independently reviewed exact SVG/WPF geometry, loader/About marks and bounded accents, native/custom-caption icon wiring, explicit `SystemMenuImage` precedence, internal decorative automation peer, and GPL provenance. The standard-library Python exporter reproducibly emits identical six-frame 32-bit ICO bytes (`16,24,32,48,64,256`; SHA-256 `4f25fdd711c5c8571e9db65eb0bfd8904af6810bc3fb7f086fb173c3cc6e8425`). The exact product build passes with 0 warnings/errors; XML, source, protected-hash, and whitespace checks pass. |
 | NSPY-004 | pending | — | — |
 
 Allowed statuses are `pending`, `in progress`, `approved`, and `skipped`. A ticket is `approved` only after implementation verification and independent review. Each approved ticket receives one focused local commit whose subject contains its ticket ID. The specification/ledger update may accompany the relevant ticket commit after the initial dedicated specification commit.
