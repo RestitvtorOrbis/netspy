@@ -1,8 +1,8 @@
 # netSpy Visible Branding
 
-Status: ready for independent review
-Repository baseline: `73faa5808` (`master`)
-Specification date: 2026-09-03
+Status: decision-complete; implementation required now
+Repository baseline: `24e3b7241` (`master`)
+Specification date: 2026-09-04
 
 ## 1. Outcome
 
@@ -47,6 +47,7 @@ No netSpy release-feed URL is present in the repository. This change must not pr
 - `dnSpy/dnSpy/Images/dnSpy.ico` and `dnSpy-x86.ico` are the native application icons.
 - `dnSpy.csproj`, `dnSpy-x86.csproj`, and the common `MetroWindow` style refer to those icons.
 - `MainWindow.xaml` and `DsLoaderControl.xaml` use the generic `DsImages.Assembly` glyph. The main-window use is the custom caption's system-menu glyph; the loader use is the prominent startup graphic.
+- The custom `MetroWindow` caption does not render `Window.Icon`. Its template renders only a `DsImage` bound to `MetroWindow.SystemMenuImage`, whose default is an empty `ImageReference`. Removing the main window's explicit `SystemMenuImage` without changing that template would therefore leave the caption button blank even though the taskbar/native window icon changed.
 - The four `.dntheme` files own user-selectable and accessibility-sensitive colors. Recoloring them globally would change editor semantics and user expectations far beyond branding.
 
 The appropriate visual seam is a small reusable WPF vector mark on startup and About, a matching native icon, and a restrained cyan-to-violet accent rule on those two branding surfaces. The existing themes, editor classification colors, generic assembly/file glyphs, and high-contrast behavior remain untouched.
@@ -76,9 +77,13 @@ The following untracked BND-027 work predates this specification and is unrelate
 
 Implementers and reviewers must neither edit nor stage those files.
 
-`Libraries/Microsoft.NET.HostModel.Bundle/packages.lock.json` is also already modified by a restore which evaluated the portable project as `net10.0-windows7.0`. It belongs to CI-002's restore-graph reconciliation, not branding. Branding tickets must neither edit nor stage it. `docs/specs/ci-completion.md` owns the preceding CI repairs and the combined delivery order.
+At baseline their SHA-256 hashes are, respectively, `fa8966a0331d0192dbbaf1fa2d80018f64e50caf03e2e54d3ff54d046f55a81d`, `9923b1eb6932ff049358bd571639fa3bfc00a63eb936386a6581a35f67e06753`, and `16f7e10a075c7361223b87d3ff184c46d9fc723ff89f79d6a84d598486dbdb9f`. These hashes are the preservation contract until their owner handles them.
 
-`docs/specs/dotnet-single-file-bundles.md` is already modified by the coordinating specification pass. It is BND specification/ledger state: no NSPY ticket may edit or stage it. After BND-028 it must be clean, except that the independently approved BND ticket commit may include its own ledger row. NSPY tickets update only this branding ledger.
+CI-001 and CI-002 are committed at this baseline; `Libraries/Microsoft.NET.HostModel.Bundle/packages.lock.json`, `docs/specs/ci-completion.md`, and `docs/specs/dotnet-single-file-bundles.md` are clean. They remain CI/BND-owned and no NSPY ticket may edit or stage them. CI-003 is awaiting separate push authorization, but the user's 2026-09-04 direction explicitly starts branding now and supersedes the former CI-003/BND-027/BND-028 prerequisite. Branding implementation must therefore coexist with, but must not absorb or modify, the three untracked BND-027 files.
+
+### 2.6 Implementation audit at the current baseline
+
+Visible branding is **not implemented** at `24e3b7241`. History contains no NSPY implementation commit. Product sources still use `Constants.DnSpy` for visible titles, the loader and About still use the generic assembly identity, application icon references still point to `dnSpy.ico`/`dnSpy-x86.ico`, file metadata has no BR-6 overrides, and README still leads with dnSpy. Repository-wide `netSpy` matches in compiled product code are contributor copyright headers, not visible branding. All four NSPY tickets below are therefore required; none may be marked skipped based on existing code.
 
 ## 3. Requirements
 
@@ -166,7 +171,9 @@ Implementation assets:
 
 Use `BrandMark` in place of `DsImages.Assembly` in `DsLoaderControl.xaml`. Add the same 64-pixel mark above the textual header in `AboutScreen.Write()` using its existing `AddUIElement` mechanism. Do not replace generic assembly glyphs elsewhere: those glyphs communicate document types, not product identity.
 
-Remove `MainWindow.xaml`'s explicit generic `SystemMenuImage="{x:Static img:DsImages.Assembly}"` override so the window uses the new native application icon supplied by the existing `MetroWindow` icon style. Do not register the brand mark as a document-type image.
+Remove `MainWindow.xaml`'s explicit generic `SystemMenuImage="{x:Static img:DsImages.Assembly}"` override. In the common `MetroWindow` control template, preserve the existing `DsImage` path whenever `SystemMenuImage.IsDefault` is false, and add a standard WPF `Image` fallback bound to the templated parent's `Icon` whenever `SystemMenuImage.IsDefault` is true. The two paths are mutually exclusive and occupy the same 16-by-16 caption slot. Because the style's `Icon` is changed to `../Images/netSpy.ico`, the main window's custom system-menu caption then displays the same netSpy icon as the native window/taskbar while any window that deliberately supplies an `ImageReference` retains the existing themed image-service behavior.
+
+Do not change the `MetroWindow.SystemMenuImage` dependency property, its default, `DsImage`, `ImageReference`, or the image service. Do not create a `DsImages.netSpy` member or register the brand mark as a document-type image. The template fallback is solely presentation wiring from the already-existing `Window.Icon`; generic assembly/file glyph semantics remain unchanged.
 
 Immediately below the mark on both loader and About, add a non-interactive 2-device-independent-pixel-high horizontal accent, at most 160 units wide, filled left-to-right from cyan `#FF22D3EE` to violet `#FFA78BFA`. It is decorative, excluded from keyboard focus and the accessibility tree, and must not replace dynamic theme brushes for text, controls, selection, or editor content. This is the complete color/appearance change outside the mark and icon.
 
@@ -237,6 +244,20 @@ This must be covered by a source-level invariant test or a small extracted inter
 
 `BrandMark` is presentation-only and belongs in the main UI assembly. It does not use `dnSpy.Images`, add a contract assembly type, or register with the image service. The loader declares it directly in XAML. The About screen constructs it directly because it is in the same assembly. The native ICO is compiled via `ApplicationIcon` and included as the window icon resource.
 
+The common `MetroWindow` template keeps `SystemMenuImage` authoritative when a caller supplies one and uses `Window.Icon` only for the default/empty reference. The required shape is conceptually:
+
+```xml
+<Grid Width="16" Height="16">
+    <Image x:Name="nativeSystemMenuImage"
+           Source="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=Icon}"
+           Stretch="Uniform" />
+    <img:DsImage x:Name="referencedSystemMenuImage"
+                 ImageReference="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=SystemMenuImage}" />
+</Grid>
+```
+
+The template defaults `nativeSystemMenuImage` to collapsed. A `DataTrigger` bound to `SystemMenuImage.IsDefault` with value `True` collapses `referencedSystemMenuImage` and shows `nativeSystemMenuImage`. No trigger changes the system-menu button command, hit testing, visibility, dimensions outside that 16-by-16 content slot, caption brushes, or supplied `ImageReference` rendering.
+
 ### 4.4 Test contract
 
 Add `Tests/dnSpy.Bundles.IntegrationTests/BrandingTests.cs` with focused tests that establish:
@@ -247,6 +268,7 @@ Add `Tests/dnSpy.Bundles.IntegrationTests/BrandingTests.cs` with focused tests t
 - `AssemblyTitleAttribute`, `AssemblyProductAttribute`, `AssemblyCompanyAttribute`, and `AssemblyDescriptionAttribute` have the BR-6 values;
 - neutral resources used by loader, Explorer, restart, About title/license/description/attribution, and upstream update messages contain the intended name/context;
 - the legacy copy-data header remains tied to `Constants.DnSpy` while the window-title discovery is tied to `Constants.AppName`. If reflection cannot observe constants embedded by the compiler, implement this as a test that reads only the two relevant source files from a repository root resolved relative to the test assembly; do not add a production API solely for testing.
+- source invariants prove `MainWindow.xaml` no longer assigns `DsImages.Assembly` to `SystemMenuImage`, and the common template contains both the non-default `SystemMenuImage`/`DsImage` path and the default-reference `Window.Icon` fallback. This is a structural source test, not a pixel or exact-template snapshot.
 
 Do not test exact ICO bytes or take pixel snapshots. The project build proves the ICO is valid enough for the Windows resource compiler; the smoke test proves its visible wiring.
 
@@ -257,7 +279,7 @@ Do not test exact ICO bytes or take pixel snapshots. The project build proves th
 - Maintaining existing settings, extensions, scripts, and single-instance behavior is more important than making internal binaries and namespaces match the new brand in this narrow change.
 - Original icon authorship/licensing is not documented separately from the GPL repository. A new mark avoids both visual confusion and provenance ambiguity.
 - English fallback for the two new About provenance sentences is acceptable; existing translated surrounding UI remains intact.
-- CI repair and BND-027/BND-028 completion are preceding work owned outside these tickets.
+- CI-003 and BND-027/BND-028 remain separately owned work, but the user has explicitly removed them as prerequisites for this branding ticket set.
 
 ## 6. Non-goals
 
@@ -273,19 +295,17 @@ Do not test exact ICO bytes or take pixel snapshots. The project build proves th
 ## 7. Dependency-ordered implementation tickets
 
 ```text
-CI-001 -> CI-002 -> BND-027 -> BND-028
-    -> NSPY-001 Visible identity boundary and metadata
-    |
-    +--> NSPY-002 About/resources/provenance
-    |        |
-    |        +--> NSPY-003 Original visual mark and native icon
-    |                    |
-    +--------------------+--> NSPY-004 Branding regression tests and README
+NSPY-001 Visible identity boundary and metadata
+    -> NSPY-002 About/resources/provenance
+        -> NSPY-003 Original visual mark and native icon
+            -> NSPY-004 Branding regression tests and README
 ```
+
+The sequence is strict so each change is independently reviewable. Each ticket receives exactly one approved local commit, including that ticket's ledger-row update in this file. Do not combine tickets into one commit. Before each commit, the index may contain only that ticket's owned files plus `docs/specs/netspy-ui-branding.md`; the three protected BND-027 files must remain untracked and hash-identical.
 
 ### NSPY-001 — Separate visible identity from compatibility identity
 
-Depends on: approved BND-028 and green final bundle CI gates.
+Depends on: none. Start from baseline `24e3b7241` with only the three protected untracked BND-027 files present.
 
 Scope:
 
@@ -294,7 +314,7 @@ Scope:
 - Change only the window-discovery title prefix to `AppName`; preserve the `WM_COPYDATA` header.
 - Add BR-6 metadata and keep the primary assembly simple name `dnSpy`.
 
-Likely owned files:
+Owned files:
 
 - `dnSpy/dnSpy/MainApp/Constants.cs`
 - `dnSpy/dnSpy/MainApp/AppWindow.cs`
@@ -326,11 +346,24 @@ Scope:
 - Change the Explorer failure caption.
 - Preserve URLs, release behavior, credits, and legal content.
 
-Likely owned files:
+Owned files:
 
 - `dnSpy/dnSpy/Properties/dnSpy.Resources.resx`
-- only satellite `dnSpy.Resources.*.resx` files containing affected product tokens
-- generated `dnSpy.Resources.Designer.cs` only if the repository's normal ResX generator changes it for the two new keys
+- `dnSpy/dnSpy/Properties/dnSpy.Resources.cs.resx`
+- `dnSpy/dnSpy/Properties/dnSpy.Resources.de.resx`
+- `dnSpy/dnSpy/Properties/dnSpy.Resources.es-ES.resx`
+- `dnSpy/dnSpy/Properties/dnSpy.Resources.fa.resx`
+- `dnSpy/dnSpy/Properties/dnSpy.Resources.fr.resx`
+- `dnSpy/dnSpy/Properties/dnSpy.Resources.hu.resx`
+- `dnSpy/dnSpy/Properties/dnSpy.Resources.it.resx`
+- `dnSpy/dnSpy/Properties/dnSpy.Resources.pt-BR.resx`
+- `dnSpy/dnSpy/Properties/dnSpy.Resources.pt-PT.resx`
+- `dnSpy/dnSpy/Properties/dnSpy.Resources.ru.resx`
+- `dnSpy/dnSpy/Properties/dnSpy.Resources.tr.resx`
+- `dnSpy/dnSpy/Properties/dnSpy.Resources.uk.resx`
+- `dnSpy/dnSpy/Properties/dnSpy.Resources.vi.resx`
+- `dnSpy/dnSpy/Properties/dnSpy.Resources.zh-CN.resx`
+- `dnSpy/dnSpy/Properties/dnSpy.Resources.Designer.cs`, regenerated for the two new neutral keys
 - `dnSpy/dnSpy/MainApp/AboutScreen.cs`
 - `dnSpy/dnSpy/MainApp/Settings/WindowsExplorerIntegration.cs`
 
@@ -350,10 +383,10 @@ Scope:
 
 - Create the exact original SVG/vector/native icon assets and provenance note in BR-5.
 - Use the vector mark in loader and About.
-- Replace application/window native icon references for AnyCPU and x86 desktop launchers.
-- Do not change themes or generic document glyphs.
+- Replace application/window native icon references for AnyCPU and x86 desktop launchers, and implement the BR-5 default-reference caption fallback in the existing common `MetroWindow` template.
+- Do not change `.dntheme` files, global color resources, the image service, or generic document glyphs.
 
-Likely owned files:
+Owned files:
 
 - `dnSpy/dnSpy/Branding/netSpy-logo.svg`
 - `dnSpy/dnSpy/Branding/README.md`
@@ -369,7 +402,8 @@ Likely owned files:
 
 Acceptance:
 
-- App/taskbar/window icon, loader, and About share the new mark.
+- App/taskbar/native window icon, custom main-window caption, loader, and About share the new mark.
+- The custom caption obtains the mark from `Window.Icon` only when `SystemMenuImage` is the default reference. The NSPY-004 structural test verifies the mutually exclusive trigger, bindings, and `DsImage` precedence; the Windows smoke check verifies the rendered main-window result.
 - Loader and About contain only the bounded cyan-to-violet accent rule described by BR-5; no global theme color changes are introduced.
 - The old icon is no longer referenced by desktop app/window builds but remains tracked for history/compatibility unless a separate cleanup is approved.
 - All required ICO sizes are present.
@@ -378,11 +412,11 @@ Acceptance:
 
 ### NSPY-004 — Add regression coverage and repository-facing identity
 
-Depends on: NSPY-001 and NSPY-003.
+Depends on: NSPY-003.
 
 Scope:
 
-- Add the focused BR-4.4 tests to the existing integration test project.
+- Add the focused section 4.4 tests to the existing integration test project.
 - Update only the README heading/opening described by BR-7.
 - Run scoped tests, normal build, metadata checks, and Windows smoke acceptance.
 
@@ -397,7 +431,7 @@ Acceptance:
 - Tests detect accidental re-coupling of visible and compatibility identity.
 - Tests detect metadata or critical neutral-copy regression.
 - README leads with netSpy and retains explicit dnSpyEx lineage.
-- No BND/CI-owned file is modified or staged by this ticket; the already-approved BND-027 files remain byte-identical to their BND-027 commit.
+- No BND/CI-owned file is modified or staged by this ticket; the three protected untracked BND-027 files remain byte-identical to the hashes in section 2.5.
 - All final verification in section 9 passes.
 
 ## 8. Ticket ledger
@@ -463,6 +497,24 @@ Verify the icon frame inventory using a Windows icon inspector selected during N
 ### 9.4 Source invariants
 
 ```powershell
+$protectedBnd027 = [ordered]@{
+  'Tests/dnSpy.Bundles.IntegrationTests/BundleLogicalEquivalenceTests.cs' = 'fa8966a0331d0192dbbaf1fa2d80018f64e50caf03e2e54d3ff54d046f55a81d'
+  'Tests/dnSpy.Bundles.IntegrationTests/IntegrationFixtureLocator.cs' = '9923b1eb6932ff049358bd571639fa3bfc00a63eb936386a6581a35f67e06753'
+  'Tests/dnSpy.Bundles.IntegrationTests/OrdinaryOpenSaveRegressionTests.cs' = '16f7e10a075c7361223b87d3ff184c46d9fc723ff89f79d6a84d598486dbdb9f'
+}
+foreach ($entry in $protectedBnd027.GetEnumerator()) {
+  if (-not (Test-Path -LiteralPath $entry.Key -PathType Leaf)) {
+    throw "Protected BND-027 file is missing: $($entry.Key)"
+  }
+  $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $entry.Key).Hash.ToLowerInvariant()
+  if ($actual -cne $entry.Value) {
+    throw "Protected BND-027 file changed: $($entry.Key)"
+  }
+  if (git ls-files --error-unmatch -- $entry.Key 2>$null) {
+    throw "Protected BND-027 file was staged or committed: $($entry.Key)"
+  }
+}
+
 if (rg -n '<AssemblyName>netSpy|namespace netSpy|assembly=netSpy' dnSpy Extensions Tests) {
   throw 'Internal identity was renamed'
 }
@@ -474,13 +526,13 @@ git diff --check
 git status --short
 ```
 
-By branding delivery, BND-027 is expected to be committed and CI-002 must have reconciled the lock file. The status must contain no branding-unrelated changes; if either earlier work item remains uncommitted, stop rather than absorbing it into an NSPY commit.
+The three protected BND-027 files are expected to remain untracked throughout branding delivery. Their presence is not a blocker; any content change or staged state is. No other branding-unrelated change may be present or absorbed into an NSPY commit.
 
 ### 9.5 Windows UI smoke acceptance
 
 On a Windows runner or workstation, launch the framework-dependent .NET build and record pass/fail for:
 
-1. The taskbar and native window icon show the new network-`n` mark.
+1. The taskbar, native window icon, and custom-caption system-menu button all show the new network-`n` mark; the caption button remains clickable and opens the normal system menu.
 2. The loader shows the mark and `Loading netSpy. Please wait...`.
 3. The main title begins `netSpy` and retains architecture/framework qualifiers.
 4. Help → About is titled `About netSpy`, displays the mark, the four BR-4 lines, loaded files, GPL text, and original credits.
@@ -499,6 +551,6 @@ On a Windows runner or workstation, launch the framework-dependent .NET build an
 - Console/help output, extension names, internal strings used as content-type or settings identifiers, and historical/legal source comments retain dnSpy.
 - No installer, independent netSpy release feed, code-signing identity, or packaging migration is established by this work.
 
-## 11. Combined delivery boundary
+## 11. Delivery boundary
 
-This ticket set begins only after `docs/specs/ci-completion.md` tickets CI-001/CI-002 and bundle tickets BND-027/BND-028 are independently approved. Each NSPY ticket receives one focused local commit and updates only its own ledger row. A fresh GitHub Actions run of the final branded candidate must still pass every CI-002 and BND-028 required job; the UI smoke list remains a separate Windows acceptance record because CI does not provide an interactive desktop.
+This ticket set starts immediately at `24e3b7241`; CI-003 and BND-027/BND-028 are not prerequisites under the user's explicit override. Each NSPY ticket receives one focused local commit and updates only its own ledger row. Branding work must not change the workflow, build-script repair, bundle implementation/specification, HostModel lock file, or the three protected BND-027 files. The scoped tests, normal Windows product build, identity checks, and UI smoke list in section 9 are the branding acceptance gates. A later final-candidate GitHub Actions run remains valuable integration evidence, but remote CI-003 authorization or unfinished BND tickets cannot block completion of NSPY-001 through NSPY-004.
