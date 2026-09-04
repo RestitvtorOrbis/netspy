@@ -232,7 +232,7 @@
     <value>Alt+F4</value>
   </data>
   <data name="ExplorerOpenWithDnSpy" xml:space="preserve">
-    <value>Відкрити у dnSpy</value>
+    <value>Відкрити у netSpy</value>
   </data>
   <data name="FindCommand" xml:space="preserve">
     <value>_Пошук</value>
@@ -307,7 +307,7 @@
     <value>Невірний текст</value>
   </data>
   <data name="LoadingDnSpyPleaseWait" xml:space="preserve">
-    <value>Завантажую dnSpy! Прохання зачекати...</value>
+    <value>Завантажую netSpy! Прохання зачекати...</value>
   </data>
   <data name="Menu_Edit" xml:space="preserve">
     <value>_Редагувати</value>
@@ -757,7 +757,7 @@
     <value>Система</value>
   </data>
   <data name="LanguageSwitchMessage" xml:space="preserve">
-    <value>Зміни набудуть чинності після перезапуску dnSpy.</value>
+    <value>Зміни набудуть чинності після перезапуску netSpy.</value>
   </data>
   <data name="ShortCutKeyCtrlShiftO" xml:space="preserve">
     <value>Ctrl+Shift+O</value>
@@ -858,7 +858,7 @@
     <value>Не вдалося отримати інформацію про оновлення!</value>
   </data>
   <data name="AboutScreen_LicenseInfo" xml:space="preserve">
-    <value>dnSpy ліцензований під GPLv3.</value>
+    <value>netSpy ліцензований під GPLv3.</value>
   </data>
   <data name="AboutScreen_LoadedFiles" xml:space="preserve">
     <value>Завантажені файли:</value>

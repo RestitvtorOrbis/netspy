@@ -60,7 +60,7 @@ namespace dnSpy.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to _Issues.
+        ///   Looks up a localized string similar to Upstream dnSpyEx _Issues.
         /// </summary>
         public static string About_Issues {
             get {
@@ -78,7 +78,7 @@ namespace dnSpy.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to _Latest Release.
+        ///   Looks up a localized string similar to Latest _Upstream dnSpyEx Release.
         /// </summary>
         public static string About_LatestRelease {
             get {
@@ -87,7 +87,7 @@ namespace dnSpy.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to _About.
+        ///   Looks up a localized string similar to _About netSpy.
         /// </summary>
         public static string About_Menu {
             get {
@@ -96,7 +96,7 @@ namespace dnSpy.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to _Source Code.
+        ///   Looks up a localized string similar to Upstream dnSpyEx _Source Code.
         /// </summary>
         public static string About_SourceCode {
             get {
@@ -105,7 +105,7 @@ namespace dnSpy.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to About.
+        ///   Looks up a localized string similar to About netSpy.
         /// </summary>
         public static string About_TabTitle {
             get {
@@ -114,7 +114,7 @@ namespace dnSpy.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to _Wiki.
+        ///   Looks up a localized string similar to Upstream dnSpyEx _Wiki.
         /// </summary>
         public static string About_Wiki {
             get {
@@ -123,7 +123,16 @@ namespace dnSpy.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Check for updates.
+        ///   Looks up a localized string similar to Based on dnSpyEx and dnSpy; original copyright and contributor credits follow..
+        /// </summary>
+        public static string AboutScreen_Attribution {
+            get {
+                return ResourceManager.GetString("AboutScreen_Attribution", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Check for upstream dnSpyEx updates.
         /// </summary>
         public static string AboutScreen_CheckForUpdates {
             get {
@@ -139,6 +148,15 @@ namespace dnSpy.Properties {
                 return ResourceManager.GetString("AboutScreen_CheckingForUpdates", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to A dnSpyEx-based .NET assembly editor, debugger, and single-file bundle explorer..
+        /// </summary>
+        public static string AboutScreen_Description {
+            get {
+                return ResourceManager.GetString("AboutScreen_Description", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Failed to retrive update information!.
@@ -150,7 +168,7 @@ namespace dnSpy.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to dnSpy is licensed under GPLv3..
+        ///   Looks up a localized string similar to netSpy is free software licensed under GPLv3..
         /// </summary>
         public static string AboutScreen_LicenseInfo {
             get {
@@ -168,7 +186,7 @@ namespace dnSpy.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to A new version of dnSpy is available: {0}, Do you want to open the download page?.
+        ///   Looks up a localized string similar to A new upstream dnSpyEx release is available: {0}. Do you want to open its download page?.
         /// </summary>
         public static string AboutScreen_NewUpdateAvailable {
             get {
@@ -177,7 +195,7 @@ namespace dnSpy.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to You are running the latest version of dnSpy!.
+        ///   Looks up a localized string similar to You are running a version based on the latest upstream dnSpyEx release..
         /// </summary>
         public static string AboutScreen_RunningLatestVersion {
             get {
@@ -1910,7 +1928,7 @@ namespace dnSpy.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Open with dnSpy.
+        ///   Looks up a localized string similar to Open with netSpy.
         /// </summary>
         public static string ExplorerOpenWithDnSpy {
             get {
@@ -2918,7 +2936,7 @@ namespace dnSpy.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to A new version of dnSpy is available: {0}.
+        ///   Looks up a localized string similar to A new upstream dnSpyEx release is available: {0}.
         /// </summary>
         public static string InfoBar_NewUpdateAvailable {
             get {
@@ -2981,7 +2999,7 @@ namespace dnSpy.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to You must restart dnSpy for the language change to take effect..
+        ///   Looks up a localized string similar to You must restart netSpy for the language change to take effect..
         /// </summary>
         public static string LanguageSwitchMessage {
             get {
@@ -2990,7 +3008,7 @@ namespace dnSpy.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Loading dnSpy. Please wait....
+        ///   Looks up a localized string similar to Loading netSpy. Please wait....
         /// </summary>
         public static string LoadingDnSpyPleaseWait {
             get {

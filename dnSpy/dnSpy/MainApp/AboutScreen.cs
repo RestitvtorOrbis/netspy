@@ -205,9 +205,13 @@ namespace dnSpy.MainApp {
 #else
 #error Unknown target framework
 #endif
-			output.WriteLine($"{Constants.DnSpy} {appWindow.AssemblyInformationalVersion} ({frameworkName})", BoxedTextColor.Text);
+			output.WriteLine($"{Constants.AppName} {appWindow.AssemblyInformationalVersion} ({frameworkName})", BoxedTextColor.Text);
+			output.WriteLine();
+			output.WriteLine(dnSpy_Resources.AboutScreen_Description, BoxedTextColor.Text);
 			output.WriteLine();
 			output.WriteLine(dnSpy_Resources.AboutScreen_LicenseInfo, BoxedTextColor.Text);
+			output.WriteLine();
+			output.WriteLine(dnSpy_Resources.AboutScreen_Attribution, BoxedTextColor.Text);
 			output.WriteLine();
 
 			output.AddUIElement(delegate {

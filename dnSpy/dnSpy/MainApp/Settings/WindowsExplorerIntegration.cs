@@ -76,7 +76,7 @@ namespace dnSpy.MainApp.Settings {
 
 				var path = Constants.ExecutablePath;
 				if (!File.Exists(path)) {
-					messageBoxService.Show("Cannot locate dnSpy!");
+					messageBoxService.Show($"Cannot locate {Constants.AppName}!");
 					return;
 				}
 				path = $"\"{path}\" -- \"%1\"";

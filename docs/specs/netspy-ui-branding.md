@@ -439,7 +439,7 @@ Acceptance:
 | Ticket | Status | Commit | Evidence / notes |
 |---|---|---|---|
 | NSPY-001 | approved | `feat(NSPY-001): separate visible application identity` | All nine owned title/metadata files independently reviewed; visible captions and window discovery use `AppName`, while `DnSpy`, `DnSpyFile`, the copy-data header, assembly name, launchers, and persisted identities remain unchanged. The exact `net10.0-windows --no-restore` product build passes with 0 warnings/errors; source invariants, protected BND-027 hashes, and `git diff --check` pass. |
-| NSPY-002 | pending | — | — |
+| NSPY-002 | approved | `feat(NSPY-002): clarify netSpy identity and provenance` | Neutral and all 14 enumerated satellite resources, deterministic designer members, About ordering/provenance, Explorer failure text, and upstream dnSpyEx update/link labels independently reviewed. Existing URLs, update behavior, translated surrounding text, loaded-file list, GPL content, and credits remain intact. The exact product build passes with 0 warnings/errors; protected hashes and `git diff --check` pass. |
 | NSPY-003 | pending | — | — |
 | NSPY-004 | pending | — | — |
 

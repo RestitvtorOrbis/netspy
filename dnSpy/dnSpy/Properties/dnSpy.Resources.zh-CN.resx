@@ -232,7 +232,7 @@
     <value>Alt+F4</value>
   </data>
   <data name="ExplorerOpenWithDnSpy" xml:space="preserve">
-    <value>使用 dnSpy 打开</value>
+    <value>使用 netSpy 打开</value>
   </data>
   <data name="FindCommand" xml:space="preserve">
     <value>查找(_F)</value>
@@ -307,7 +307,7 @@
     <value>文本输入无效</value>
   </data>
   <data name="LoadingDnSpyPleaseWait" xml:space="preserve">
-    <value>dnSpy 正在加载，请稍候...</value>
+    <value>netSpy 正在加载，请稍候...</value>
   </data>
   <data name="Menu_Edit" xml:space="preserve">
     <value>编辑(_E)</value>
@@ -757,7 +757,7 @@
     <value>使用系统默认语言</value>
   </data>
   <data name="LanguageSwitchMessage" xml:space="preserve">
-    <value>当重新启动 dnSpy 后，语言更改才会生效。</value>
+    <value>当重新启动 netSpy 后，语言更改才会生效。</value>
   </data>
   <data name="ShortCutKeyCtrlShiftO" xml:space="preserve">
     <value>Ctrl+Shift+O</value>
@@ -858,7 +858,7 @@
     <value>获取更新信息失败！</value>
   </data>
   <data name="AboutScreen_LicenseInfo" xml:space="preserve">
-    <value>dnSpy is licensed under GPLv3.</value>
+    <value>netSpy is licensed under GPLv3.</value>
   </data>
   <data name="AboutScreen_LoadedFiles" xml:space="preserve">
     <value>已加载的文件: </value>

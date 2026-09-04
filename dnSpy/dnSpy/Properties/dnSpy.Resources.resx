@@ -118,22 +118,22 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="About_Issues" xml:space="preserve">
-    <value>_Issues</value>
+    <value>Upstream dnSpyEx _Issues</value>
   </data>
   <data name="About_LatestBuild" xml:space="preserve">
     <value>Latest _Build</value>
   </data>
   <data name="About_LatestRelease" xml:space="preserve">
-    <value>_Latest Release</value>
+    <value>Latest _Upstream dnSpyEx Release</value>
   </data>
   <data name="About_Menu" xml:space="preserve">
-    <value>_About</value>
+    <value>_About netSpy</value>
   </data>
   <data name="About_SourceCode" xml:space="preserve">
-    <value>_Source Code</value>
+    <value>Upstream dnSpyEx _Source Code</value>
   </data>
   <data name="About_TabTitle" xml:space="preserve">
-    <value>About</value>
+    <value>About netSpy</value>
   </data>
   <data name="AllFiles" xml:space="preserve">
     <value>All Files</value>
@@ -232,7 +232,7 @@
     <value>Alt+F4</value>
   </data>
   <data name="ExplorerOpenWithDnSpy" xml:space="preserve">
-    <value>Open with dnSpy</value>
+    <value>Open with netSpy</value>
   </data>
   <data name="FindCommand" xml:space="preserve">
     <value>_Find</value>
@@ -307,7 +307,7 @@
     <value>The text is invalid</value>
   </data>
   <data name="LoadingDnSpyPleaseWait" xml:space="preserve">
-    <value>Loading dnSpy. Please wait...</value>
+    <value>Loading netSpy. Please wait...</value>
   </data>
   <data name="Menu_Edit" xml:space="preserve">
     <value>_Edit</value>
@@ -757,7 +757,7 @@
     <value>System</value>
   </data>
   <data name="LanguageSwitchMessage" xml:space="preserve">
-    <value>You must restart dnSpy for the language change to take effect.</value>
+    <value>You must restart netSpy for the language change to take effect.</value>
   </data>
   <data name="ShortCutKeyCtrlShiftO" xml:space="preserve">
     <value>Ctrl+Shift+O</value>
@@ -848,26 +848,32 @@
   <data name="MemberKind_Properties" xml:space="preserve">
     <value>Properties</value>
   </data>
+  <data name="AboutScreen_Attribution" xml:space="preserve">
+    <value>Based on dnSpyEx and dnSpy; original copyright and contributor credits follow.</value>
+  </data>
   <data name="AboutScreen_CheckForUpdates" xml:space="preserve">
-    <value>Check for updates</value>
+    <value>Check for upstream dnSpyEx updates</value>
   </data>
   <data name="AboutScreen_CheckingForUpdates" xml:space="preserve">
     <value>Checking for updates...</value>
+  </data>
+  <data name="AboutScreen_Description" xml:space="preserve">
+    <value>A dnSpyEx-based .NET assembly editor, debugger, and single-file bundle explorer.</value>
   </data>
   <data name="AboutScreen_FailedToRetrieveUpdateInfo" xml:space="preserve">
     <value>Failed to retrive update information!</value>
   </data>
   <data name="AboutScreen_LicenseInfo" xml:space="preserve">
-    <value>dnSpy is licensed under GPLv3.</value>
+    <value>netSpy is free software licensed under GPLv3.</value>
   </data>
   <data name="AboutScreen_LoadedFiles" xml:space="preserve">
     <value>Loaded files:</value>
   </data>
   <data name="AboutScreen_NewUpdateAvailable" xml:space="preserve">
-    <value>A new version of dnSpy is available: {0}, Do you want to open the download page?</value>
+    <value>A new upstream dnSpyEx release is available: {0}. Do you want to open its download page?</value>
   </data>
   <data name="AboutScreen_RunningLatestVersion" xml:space="preserve">
-    <value>You are running the latest version of dnSpy!</value>
+    <value>You are running a version based on the latest upstream dnSpyEx release.</value>
   </data>
   <data name="SearchWindow_SearchFrameworkAssemblies" xml:space="preserve">
     <value>Search in framework assemblies</value>
@@ -906,7 +912,7 @@
     <value>Ctrl+Shift+P</value>
   </data>
   <data name="About_Wiki" xml:space="preserve">
-    <value>_Wiki</value>
+    <value>Upstream dnSpyEx _Wiki</value>
   </data>
   <data name="Window_Output" xml:space="preserve">
     <value>Output</value>
@@ -1110,7 +1116,7 @@
     <value>Incremental Search</value>
   </data>
   <data name="InfoBar_NewUpdateAvailable" xml:space="preserve">
-    <value>A new version of dnSpy is available: {0}</value>
+    <value>A new upstream dnSpyEx release is available: {0}</value>
   </data>
   <data name="InfoBar_OpenDownloadPage" xml:space="preserve">
     <value>Open download page</value>
