@@ -2,7 +2,7 @@
 
 Status: ready for independent review
 Repository baseline: `73faa5808` (`master`)
-Specification date: 2026-09-03
+Specification date: 2026-09-04
 Observed failing run: `33673455945` (`https://github.com/RestitvtorOrbis/netspy/actions/runs/33673455945`)
 
 ## 1. Outcome
@@ -74,9 +74,9 @@ The portable projects remain `net48;net10.0`; adding `net10.0-windows`, changing
 
 ### CI-R4 — Actual GitHub Actions acceptance
 
-Local emulation is supporting evidence only. Completion requires a fresh run of `.github/workflows/build.yml` in `RestitvtorOrbis/netspy` at the exact candidate commit, not a rerun of failed run `33673455945`.
+Local emulation is supporting evidence only. Remote acceptance requires a fresh run of `.github/workflows/build.yml` in `RestitvtorOrbis/netspy` at the exact approved CI-002 implementation commit, not a rerun of failed run `33673455945`. CI-003 owns this remote acceptance after CI-002 has been independently approved and committed locally. The later CI-003 commit changes only this specification to record evidence; it is not a new product candidate and does not require a second product run.
 
-The candidate commit must first be present on an authorized remote branch or tag (a separate push/PR authorization boundary). `candidateRef` is the branch or tag name accepted by `workflow_dispatch`; run discovery deliberately does not use `--branch`, because tag dispatches are valid too. It selects only the exact commit SHA:
+The approved CI-002 commit must first be present on an authorized remote branch or tag (a separate push/PR authorization boundary after the local CI-002 commit exists). `candidateRef` is the branch or tag name accepted by `workflow_dispatch`; run discovery deliberately does not use `--branch`, because tag dispatches are valid too. It selects only the exact CI-002 commit SHA:
 
 ```powershell
 $repo = 'RestitvtorOrbis/netspy'
@@ -119,7 +119,7 @@ foreach ($name in $requiredJobs) {
 }
 ```
 
-Record the run ID, URL, head SHA, and all ten required job conclusions in the ticket ledger. A branch/tag mismatch that dispatches another SHA is rejected by the `--commit` lookup and `headSha` assertion. Cancelled, skipped, missing, duplicated, or non-success required jobs do not pass.
+CI-003 records the run ID, URL, CI-002 head SHA, and all ten required job conclusions in the ticket ledger. A branch/tag mismatch that dispatches another SHA is rejected by the `--commit` lookup and `headSha` assertion. Cancelled, skipped, missing, duplicated, or non-success required jobs do not pass.
 
 The required workflow job IDs are `build` (four matrix instances), `historical-bundle-fixtures` (five matrix instances), and `historical-bundle-tests`. Their canonical displayed names are the ten strings asserted above; renaming or removing one requires a specification update rather than weakening the assertion.
 
@@ -171,14 +171,14 @@ For RID publishes, restore and publish receive the same RID and self-contained p
 
 ### 4.3 Workflow relationship to bundle completion
 
-CI-001 and CI-002 repair the baseline workflow. BND-027 then adopts the preserved untracked logical-equivalence tests. BND-028 adds the execution tests and their dedicated integration jobs/gates. Branding begins only after BND-028 so branding failures cannot be confused with completion of the bundle MVP.
+CI-001 and CI-002 repair the baseline workflow. CI-003 records remote acceptance of the exact CI-002 implementation commit without changing implementation or workflow files. BND-027 then adopts the preserved untracked logical-equivalence tests. BND-028 adds the execution tests and their dedicated integration jobs/gates. Branding begins only after BND-028 so branding failures cannot be confused with completion of the bundle MVP.
 
 ## 5. Assumptions
 
 - The pinned SDKs remain `3.1.426`, `5.0.408`, `6.0.428`, `8.0.419`, and `10.0.111`.
 - `windows-latest` and the currently pinned action major versions remain acceptable; runner-image pinning is not requested.
 - The project continues to require Visual Studio MSBuild for authoritative COM reference behavior.
-- The user will decide whether to authorize pushing a candidate ref. Without that authority, CI-002 can be implemented and locally reviewed but cannot be marked accepted.
+- The user will decide whether to authorize pushing the approved CI-002 commit on a named candidate ref. Without that authority, CI-002 can still be implemented, approved, and committed locally, but CI-003 remote acceptance cannot begin.
 
 ## 6. Non-goals
 
@@ -193,8 +193,9 @@ CI-001 and CI-002 repair the baseline workflow. BND-027 then adopts the preserve
 
 ```text
 CI-001 deterministic fixture restore/build/publish
-  -> CI-002 product graph restore and green baseline workflow
-      -> BND-027 -> BND-028 -> NSPY-001 -> NSPY-002 -> NSPY-003 -> NSPY-004
+  -> CI-002 product graph restore and workflow implementation
+      -> CI-003 exact-SHA remote workflow acceptance
+          -> BND-027 -> BND-028 -> NSPY-001 -> NSPY-002 -> NSPY-003 -> NSPY-004
 ```
 
 ### CI-001 — Make fixture generation cross-SDK and restore-complete
@@ -218,7 +219,7 @@ Acceptance:
 - The real Net10 generator (not only the dotnet shim) succeeds from a clean variant root. Its representative FDD `obj/App/project.assets.json` contains a `net10.0/win-x64` target. The dependency assets contain exactly the NuGet target keys `.NETStandard,Version=v2.0` and `.NETStandard,Version=v2.0/win-x64`, and no `net10.0`/`.NETCoreApp,Version=v10.0` target. The targeted existing `ModernPublishedBundleTests` parser test proves the generated inventory contains both `SingleFile.App.dll` and `SingleFile.Dependency.dll` as assembly entries and that their logical bytes equal the corresponding build outputs.
 - No generated binary is staged.
 
-### CI-002 — Isolate solution restore and prove the complete baseline workflow
+### CI-002 — Isolate solution restore and implement the complete baseline workflow
 
 Depends on: CI-001.
 
@@ -234,14 +235,32 @@ Acceptance:
 - Portable bundle projects restore/build as `net10.0` when the product is selected as `net10.0-windows`; no `NETSDK1005` occurs.
 - All product modes keep existing output layout and artifact names.
 - The lock file has the declared portable targets and locked restore leaves it unchanged.
-- The fresh candidate-SHA GitHub Actions run required by CI-R4 has every required job successful; its evidence is recorded below.
+- Scoped local verification and independent review approve the implementation before commit.
+- The CI-002 commit contains only the owned implementation files plus a ledger update that records local approval and that remote acceptance is pending CI-003. It does not claim a run ID, URL, commit SHA, or job conclusion that cannot exist until after the commit is created.
+
+### CI-003 — Record exact-SHA remote workflow acceptance
+
+Depends on: CI-002.
+
+Owned files:
+
+- the CI specification ledger only
+
+Acceptance:
+
+- The independently approved CI-002 implementation commit is present on a user-authorized remote branch or tag; pushing remains a separate authorization boundary and occurs only after the exact local CI-002 SHA exists.
+- A fresh `workflow_dispatch` run, not a rerun of `33673455945`, uses that exact CI-002 SHA and every required job in CI-R4 succeeds.
+- The ledger records the run ID, URL, CI-002 head SHA, and all ten required job conclusions.
+- Relative to the CI-002 commit, the CI-003 worktree changes only `docs/specs/ci-completion.md`; `build.ps1`, `.github/workflows/build.yml`, and `Libraries/Microsoft.NET.HostModel.Bundle/packages.lock.json` are byte-for-byte unchanged.
+- Independent review approves the real remote evidence before the documentation-only CI-003 commit is created. BND-027 remains blocked until CI-003 is approved and committed.
 
 ## 8. Ticket ledger
 
 | Ticket | Status | Commit | Evidence / notes |
 |---|---|---|---|
 | CI-001 | approved | `fix(CI-001): make fixture generation restore-complete` | Shared three-phase helper contract passes; all five clean Net10 variants generate; App assets contain `net10.0` and `net10.0/win-x64`; dependency assets contain exactly `.NETStandard,Version=v2.0` and `.NETStandard,Version=v2.0/win-x64`; `ModernPublishedBundleTests` pass 3/3 and verify both managed entries/logical bytes; PowerShell parsing and `git diff --check` pass. Historical SDK execution remains delegated to the Windows matrix because only SDK 10.0.111 is installed locally. |
-| CI-002 | pending | — | Must include a fresh GitHub run ID/URL/SHA and all required job conclusions |
+| CI-002 | pending | — | Implementation ticket; after local approval its commit records scoped evidence and delegates exact-SHA remote acceptance to CI-003. |
+| CI-003 | blocked by CI-002 | — | Documentation-only remote acceptance ticket; must record the fresh run ID, URL, CI-002 head SHA, and all ten required job conclusions. |
 
 ## 9. Exact verification
 
@@ -300,4 +319,25 @@ git diff --check
 git status --short
 ```
 
-Finally execute CI-R4 and retain the `gh run view ... --json` output in the CI-002 ledger evidence. The worktree audit must show the three BND-027 files untouched until BND-027 owns them and must show no generated fixture artifacts.
+After scoped verification and independent approval, update the CI-002 ledger row with the local evidence and `remote acceptance pending CI-003`, then create the single CI-002 implementation commit. Do not claim its SHA or remote results in that commit. Obtain separate user authorization before pushing the exact commit on a named branch or tag.
+
+CI-003 then executes CI-R4 with `$candidateSha` set to the exact CI-002 commit SHA and retains the `gh run view ... --json` output. Before CI-003 review and commit, verify its change boundary:
+
+```powershell
+$candidateSha = '<40-character-CI-002-commit-sha>'
+if ((git rev-parse HEAD).Trim() -ne $candidateSha) {
+  throw "CI-003 must start directly from CI-002 commit $candidateSha"
+}
+
+# Run and validate CI-R4, then edit only the CI-003 ledger evidence.
+$changed = @(git diff --name-only $candidateSha --)
+if ($changed.Count -ne 1 -or $changed[0] -cne 'docs/specs/ci-completion.md') {
+  throw "CI-003 may change only docs/specs/ci-completion.md; found: $($changed -join ', ')"
+}
+git diff --exit-code $candidateSha -- build.ps1 .github/workflows/build.yml Libraries/Microsoft.NET.HostModel.Bundle/packages.lock.json
+if ($LASTEXITCODE -ne 0) { throw 'CI-003 changed CI-002 implementation files' }
+git diff --check
+git status --short
+```
+
+The CI-003 ledger evidence must contain the run ID, URL, exact CI-002 head SHA, and all ten required job conclusions before independent review returns approval and the documentation-only CI-003 commit is created. The worktree audit must show the three BND-027 files untouched until BND-027 owns them and must show no generated fixture artifacts.
