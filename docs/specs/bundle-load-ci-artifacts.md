@@ -1,6 +1,6 @@
 # Bundle loading verification, CI repair, and downloadable builds
 
-Status: BLC-001 approved and committed; delivery continues through BLC-004. Baseline: `0ceb3fb5ec19feb396f13a32dd36a0c34c4bf7b7`.
+Status: BLC-001 and BLC-002 approved and committed; delivery continues through BLC-004. Baseline: `0ceb3fb5ec19feb396f13a32dd36a0c34c4bf7b7`.
 
 ## Requirements and evidence
 
@@ -58,7 +58,7 @@ Execute sequentially: BLC-001 → BLC-002 → BLC-003 → BLC-004. Each implemen
 | Ticket | Outcome | Status | Evidence / commit |
 |---|---|---|---|
 | [BLC-001](bundle-load-ci-artifacts-tickets/BLC-001.md) | .NET Framework enum compatibility | Approved; committed | Adopted source/test; focused build/test evidence recorded; independent Sol Medium review `APPROVED`; `fix(bundles): BLC-001 support net48 document key validation` |
-| [BLC-002](bundle-load-ci-artifacts-tickets/BLC-002.md) | Pinned SDK assertion scope | Plan amended; repeat review pending | Not implemented/approved |
+| [BLC-002](bundle-load-ci-artifacts-tickets/BLC-002.md) | Pinned SDK assertion scope | Approved; committed | Workflow fix and fixture evidence recorded; independent Sol Medium repeat review `APPROVED`; `fix(ci): BLC-002 select fixture SDKs from pinned directories` |
 | [BLC-003](bundle-load-ci-artifacts-tickets/BLC-003.md) | Real document/decompiler regression gate | Plan amended; repeat review pending | Not implemented/approved |
 | [BLC-004](bundle-load-ci-artifacts-tickets/BLC-004.md) | Validated archives and Release publication | Plan amended; repeat review pending | Not implemented/approved |
 

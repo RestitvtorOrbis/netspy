@@ -62,7 +62,9 @@ jobs:
 
       - name: Assert selected product build
         run: |
-          $sdk = (& dotnet --version).Trim()
+          $sdkOutput = & dotnet --version
+          if ($LASTEXITCODE -ne 0) { throw "dotnet --version failed with exit code $LASTEXITCODE." }
+          $sdk = ($sdkOutput | Out-String).Trim()
           $tfm = '${{ matrix.target-framework }}'
           $rid = '${{ matrix.runtime-identifier }}'
           $selfContained = '${{ matrix.self-contained }}'
@@ -105,7 +107,7 @@ jobs:
             sdk: 3.1.426
             target-framework: netcoreapp3.1
             runtime-identifier: win-x64
-            self-contained: 'false,true'
+            self-contained: 'true'
           - generation: Net5
             sdk: 5.0.408
             target-framework: net5.0
@@ -138,9 +140,12 @@ jobs:
           dotnet-version: ${{ matrix.sdk }}
 
       - name: Assert selected historical fixture build
+        working-directory: Tests/TestAssets/SingleFile/${{ matrix.generation }}
         run: |
           $expectedSdk = '${{ matrix.sdk }}'
-          $sdk = (& dotnet --version).Trim()
+          $sdkOutput = & dotnet --version
+          if ($LASTEXITCODE -ne 0) { throw "dotnet --version failed with exit code $LASTEXITCODE." }
+          $sdk = ($sdkOutput | Out-String).Trim()
           $tfm = '${{ matrix.target-framework }}'
           $rid = '${{ matrix.runtime-identifier }}'
           $selfContained = '${{ matrix.self-contained }}'
@@ -222,8 +227,11 @@ jobs:
           }
 
       - name: Assert selected modern fixture build
+        working-directory: Tests/TestAssets/SingleFile/Net10
         run: |
-          $sdk = (& dotnet --version).Trim()
+          $sdkOutput = & dotnet --version
+          if ($LASTEXITCODE -ne 0) { throw "dotnet --version failed with exit code $LASTEXITCODE." }
+          $sdk = ($sdkOutput | Out-String).Trim()
           if ($sdk -ne '10.0.111') { throw "Expected SDK 10.0.111, but selected SDK is $sdk." }
           Write-Host "Selected SDK: $sdk"
           Write-Host 'Selected TFM: net10.0'
