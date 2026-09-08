@@ -1,6 +1,6 @@
 # Bundle loading verification, CI repair, and downloadable builds
 
-Status: planned; independent review pending. Baseline: `0ceb3fb5ec19feb396f13a32dd36a0c34c4bf7b7`.
+Status: amended after Sol Medium CHANGES_REQUIRED on plan commit `4112f0a7a5eee1d82330dbab31aff1d7b4877f93`; awaiting repeat independent review. Baseline: `0ceb3fb5ec19feb396f13a32dd36a0c34c4bf7b7`.
 
 ## Requirements and evidence
 
@@ -28,33 +28,39 @@ Confirmed findings:
 
 1. Preserve `BundleDocumentKey` validation semantics with the .NET Framework-compatible `Enum.IsDefined(typeof(BundleDocumentKeyKind), kind)` call. No public contract change.
 2. SDK assertions explicitly use the existing generation directory (and Net10 directory for modern fixtures). Preserve exact SDK pins and fatal checks; do not disable historical jobs or relax equality.
-3. Repair the existing two decompiler regression helpers and add one focused test of MEF-discovered bundle loading plus decompilation. Generated fixtures are the portable CI acceptance source. An optional environment variable `NETSPY_EXTERNAL_BUNDLE` enables a local read-only real-file smoke test; absence is an explicit skipped test, while an invalid configured path is a test failure. Proprietary input and decompiled text are never checked in or uploaded.
+3. Repair the existing two decompiler regression helpers and add one focused test of MEF-discovered bundle loading plus decompilation. Generated fixtures are the portable CI acceptance source. An optional environment variable `NETSPY_EXTERNAL_BUNDLE` enables a read-only real-file xUnit smoke test on Windows with an SDK (including CI when input is available); absence is an explicit skipped test, while an invalid configured path is a test failure. Proprietary input and decompiled text are never checked in or uploaded.
 4. Publish four zip archives named `netSpy-netframework.zip`, `netSpy-net.zip`, `netSpy-net-win32.zip`, and `netSpy-net-win64.zip`. Preserve existing Actions artifact names (`dnSpy-netframework`, `dnSpy-net`, `dnSpy-net-win32`, `dnSpy-net-win64`) for consumers, but store the ready-to-download zip inside each artifact. Archive root is the existing portable executable/bin layout.
 5. A successful push or manually dispatched run on `master` publishes an immutable prerelease tag `build-<full github.sha>` and title `netSpy build <first 12 SHA characters>`. A `release: published` run attaches assets to that event's existing release/tag. No tag is force-moved. Pull requests build and test without publishing Releases. Only the publication job receives `contents: write`.
-6. Publication depends on all four builds, all historical fixture/parser tests, and the focused Windows load/decompile gate. A failed gate cannot publish a release. Generated fixtures are not Release assets. Existing release asset names must never be silently overwritten: a rerun with a name collision fails with a useful message and leaves the original asset intact.
+6. Publication depends on all four builds, all historical fixture/parser tests, and the focused Windows load/decompile gate. A failed gate cannot publish a release. Generated fixtures are not Release assets. Retries reuse verified matching assets and upload only missing expected assets; conflicting names/bytes fail before any release mutation. Never overwrite assets or use `--clobber`.
 7. Produce a `SHA256SUMS.txt` covering all four archives and release notes containing the exact source SHA, workflow run URL, download variant requirements, and the supported bundle open/expand/select workflow. Downloaded zip contents must include `dnSpy.exe`, `bin/dnSpy.Bundles.x.dll`, `bin/dnSpy.Bundles.dll`, and `bin/Microsoft.NET.HostModel.Bundle.dll`.
-8. For `release: published`, preserve the current release body and append a generated provenance/usage section delimited by `<!-- netspy-build:<full SHA> -->` and `<!-- /netspy-build -->`, using `gh release edit --notes-file`. Fetch the current body immediately before appending; never replace existing prose. If this SHA's opening marker already exists, fail explicitly before editing notes or uploading assets. Newly created automatic prereleases use that same section as their initial body. Existing prereleases reused on a retry follow the append/collision rule as well.
+8. For existing releases, validate repository/release/tag identity (including peeled tag commit), source provenance, checksums and all present expected assets before mutation. Preserve the exact prior release body and append a section delimited by `<!-- netspy-build:<full SHA> -->` and `<!-- /netspy-build -->` exactly once via `gh release edit --notes-file`. A single valid matching section is reused unchanged, including its original run URL on retries; conflicting source/marker identity, duplicate or malformed sections fail. Matching assets are verified by downloaded bytes, including `SHA256SUMS.txt`; missing expected assets may be uploaded. Re-fetch and validate body/assets immediately before mutation. Notes-only and partial-upload states resume under the same checks; never delete prior notes/assets or force tags. BLC-004 defines the precise resume and executable orchestration test contracts.
 
 Non-goals: parser replacement, third-party packer support, Hand2Note modification or redistribution, rebuilding its executable, ILSpy modernization, editor/save changes, eager extraction, unrelated test cleanup, strong-name/Authenticode policy changes, debug-feature expansion, and broad robustness testing. Do not claim all Hand2Note methods decompile or the user's reported UI symptom is explained solely by passing parser checks.
 
 ## Assumptions and environmental boundaries
 
-The repository is `/home/ramon/netspy/dnSpy`, not its parent. Preserve the pre-existing `build.ps1` executable-bit change and the three untracked integration files `BundleLogicalEquivalenceTests.cs`, `IntegrationFixtureLocator.cs`, and `OrdinaryOpenSaveRegressionTests.cs`; never stage or edit them. Git identity is configured.
+The repository is `/home/ramon/netspy/dnSpy`, not its parent. Current dirty worktree ownership:
 
-The original is accessible at `/mnt/c/Program Files/Hand2Note 4.1/Hand2Note.exe` / `C:\Program Files\Hand2Note 4.1\Hand2Note.exe`. Linux has .NET SDK 10.0.111 and PowerShell; Windows has .NET 10 and WPF runtimes but no installed SDK/MSBuild. Windows-targeted test binaries can be built as far as Linux permits and executed by the Windows runtime over a WSL UNC path. The normal build still requires its documented Windows MSBuild/COM environment; record any precise environmental failure rather than claiming a full build passed.
+- `Extensions/dnSpy.Bundles/BundleDocumentKey.cs` (the compatible Enum substitution) and new `Tests/dnSpy.Bundles.IntegrationTests/BundleDocumentKeyTests.cs` are already-started BLC-001 work, explicitly authorized for Luna to adopt, inspect and verify against BLC-001. They are not unrelated changes to discard or exclude.
+- The `build.ps1` executable-bit change and untracked `Tests/dnSpy.Bundles.IntegrationTests/BundleLogicalEquivalenceTests.cs`, `IntegrationFixtureLocator.cs`, and `OrdinaryOpenSaveRegressionTests.cs` are pre-existing, non-BLC-owned work. Never edit or stage these four paths in any BLC ticket.
+- This plan amendment edits only the five committed plan Markdown files; it stages nothing and creates no commit. During later BLC-001 delivery, after independent approval, Luna may stage exactly the two adopted files plus `docs/specs/bundle-load-ci-artifacts.md` and `docs/specs/bundle-load-ci-artifacts-tickets/BLC-001.md` with explicit path arguments. Inspect `git diff --cached --name-status` and the full cached diff before committing; include only reviewed BLC-001 changes. Do not use `git add .`, `git add -A`, directory-wide staging or `git commit -a`. Leave unrelated work and any unrelated index entries untouched; an index containing unrelated staged work blocks the ticket commit until isolated without discarding it. Later tickets stage only their own reviewed paths and evidence documents.
+
+Git identity is configured.
+
+The original is accessible at `/mnt/c/Program Files/Hand2Note 4.1/Hand2Note.exe` / `C:\Program Files\Hand2Note 4.1\Hand2Note.exe`. Linux has .NET SDK 10.0.111 and PowerShell; Windows has .NET 10 and WPF runtimes but no installed SDK/MSBuild. The external xUnit project command is Windows SDK/CI-only: `dotnet test <project>` still requires an SDK with `--no-build --no-restore`; Windows runtime-only cannot run that command, and Linux cannot host its WPF-dependent Windows tests. Use the existing Windows runtime diagnostic over a WSL UNC path and before/after source SHA256 evidence as the required local fallback where available; record command/artifact identity, status/counts and hashes, or the exact missing diagnostic/hash evidence. This fallback is not an xUnit pass and does not replace the mandatory Windows CI gate. The normal build still requires its documented Windows MSBuild/COM environment; record any precise environmental failure rather than claiming a full build passed.
 
 GitHub credentials currently fail authentication. This does not block local code, tests, packaging logic, or commits. Actual push/dispatch/Release publication remains pending until authenticated access exists. The coordinator must pursue already-authorized remote publication if access becomes available, and report the exact remaining limitation otherwise. No ticket may record remote green status without a matching run SHA.
 
 ## Dependency graph and ticket ledger
 
-Execute sequentially: BLC-001 → BLC-002 → BLC-003 → BLC-004. Each implementation has its own independent review and local conventional commit, after a dedicated plan-documentation commit.
+Execute sequentially: BLC-001 → BLC-002 → BLC-003 → BLC-004. Each implementation has its own independent review and local conventional commit, after the dedicated plan-documentation commit. That commit received CHANGES_REQUIRED; these amendments await repeat review and do not constitute implementation approval.
 
 | Ticket | Outcome | Status | Evidence / commit |
 |---|---|---|---|
-| [BLC-001](bundle-load-ci-artifacts-tickets/BLC-001.md) | .NET Framework enum compatibility | Planned | Pending |
-| [BLC-002](bundle-load-ci-artifacts-tickets/BLC-002.md) | Pinned SDK assertion scope | Planned | Pending |
-| [BLC-003](bundle-load-ci-artifacts-tickets/BLC-003.md) | Real document/decompiler regression gate | Planned | Pending |
-| [BLC-004](bundle-load-ci-artifacts-tickets/BLC-004.md) | Validated archives and Release publication | Planned | Pending |
+| [BLC-001](bundle-load-ci-artifacts-tickets/BLC-001.md) | .NET Framework enum compatibility | Started; plan amended, repeat review pending | Adopted worktree source/test; unverified/uncommitted |
+| [BLC-002](bundle-load-ci-artifacts-tickets/BLC-002.md) | Pinned SDK assertion scope | Plan amended; repeat review pending | Not implemented/approved |
+| [BLC-003](bundle-load-ci-artifacts-tickets/BLC-003.md) | Real document/decompiler regression gate | Plan amended; repeat review pending | Not implemented/approved |
+| [BLC-004](bundle-load-ci-artifacts-tickets/BLC-004.md) | Validated archives and Release publication | Plan amended; repeat review pending | Not implemented/approved |
 
 ## Acceptance and exact final verification
 
@@ -70,6 +76,8 @@ msbuild Tests/dnSpy.Bundles.IntegrationTests/dnSpy.Bundles.IntegrationTests.cspr
 dotnet test Tests/dnSpy.Bundles.IntegrationTests/dnSpy.Bundles.IntegrationTests.csproj -c Release -f net10.0-windows --no-build --no-restore --filter 'FullyQualifiedName~BundleDocumentKeyTests|FullyQualifiedName~BundleDocumentProviderTests|FullyQualifiedName~BundleManagedDocumentTests|FullyQualifiedName~BundleDecompilerAnalyzerTests|FullyQualifiedName~OrdinaryLoadingDecompilerRegressionTests|FullyQualifiedName~BundleOpenPipelineTests'
 pwsh -NoProfile -File build.ps1 all
 pwsh -NoProfile -File Build/Test-ReleasePackaging.ps1
+pwsh -NoProfile -File Build/Test-ReleasePublication.ps1
+# Windows SDK only, after the project restore/build above; not runnable on local Windows runtime-only:
 $env:NETSPY_EXTERNAL_BUNDLE = 'C:\Program Files\Hand2Note 4.1\Hand2Note.exe'
 dotnet test Tests/dnSpy.Bundles.IntegrationTests/dnSpy.Bundles.IntegrationTests.csproj -c Release -f net10.0-windows --no-build --no-restore --filter FullyQualifiedName~ExternalBundleOpenSmokeTests
 git diff --check
@@ -79,4 +87,4 @@ git log -5 --oneline
 
 Run the maximum available subset locally and record missing SDKs, Windows build tools, runtime limitations, network failures, and missing authorization/authentication separately from test failures. On Windows CI the focused integration gate is mandatory, even if it could not run locally. When authenticated remote execution is possible: push only authorized commits/ref, dispatch `build.yml` on that ref if necessary, use `gh run watch <run-id> --repo RestitvtorOrbis/netspy --exit-status`, verify the run's `headSha` equals the implementation SHA, and verify all four zip assets and checksum file on the expected Release. Pending remote acceptance is reported as pending, never inferred from workflow text.
 
-Final acceptance requires evidence for enum semantics, .NET Framework compilation or explicit environmental limitation, SDK selections from generation directories, generated compressed bundle decompilation through the real document pipeline, ordinary DLL/EXE regression, original real-file nonmutation, complete archives, and Release gating. A local implementation can be delivered while authenticated remote publication remains explicitly unfulfilled.
+Final acceptance requires evidence for enum semantics, .NET Framework compilation or explicit environmental limitation, SDK selections from generation directories, generated compressed bundle decompilation through the real document pipeline, ordinary DLL/EXE regression, original real-file nonmutation, complete archives, and credential-free executable Release orchestration verification (BLC-004), including partial-publication resume and rejection before mutation. A local implementation can be delivered while authenticated remote publication remains explicitly unfulfilled.
