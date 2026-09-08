@@ -29,7 +29,7 @@ namespace dnSpy.Bundles.Extension {
 			string? relativePath = null) {
 			if (sourceBundleFilename is null)
 				throw new ArgumentNullException(nameof(sourceBundleFilename));
-			if (!Enum.IsDefined(kind))
+			if (!Enum.IsDefined(typeof(BundleDocumentKeyKind), kind))
 				throw new ArgumentOutOfRangeException(nameof(kind));
 			if (kind == BundleDocumentKeyKind.Root && !string.IsNullOrEmpty(relativePath))
 				throw new ArgumentException("A root key cannot have a child path.", nameof(relativePath));

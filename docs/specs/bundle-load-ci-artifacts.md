@@ -1,6 +1,6 @@
 # Bundle loading verification, CI repair, and downloadable builds
 
-Status: amended after Sol Medium CHANGES_REQUIRED on plan commit `4112f0a7a5eee1d82330dbab31aff1d7b4877f93`; awaiting repeat independent review. Baseline: `0ceb3fb5ec19feb396f13a32dd36a0c34c4bf7b7`.
+Status: BLC-001 approved and committed; delivery continues through BLC-004. Baseline: `0ceb3fb5ec19feb396f13a32dd36a0c34c4bf7b7`.
 
 ## Requirements and evidence
 
@@ -57,7 +57,7 @@ Execute sequentially: BLC-001 → BLC-002 → BLC-003 → BLC-004. Each implemen
 
 | Ticket | Outcome | Status | Evidence / commit |
 |---|---|---|---|
-| [BLC-001](bundle-load-ci-artifacts-tickets/BLC-001.md) | .NET Framework enum compatibility | Started; plan amended, repeat review pending | Adopted worktree source/test; unverified/uncommitted |
+| [BLC-001](bundle-load-ci-artifacts-tickets/BLC-001.md) | .NET Framework enum compatibility | Approved; committed | Adopted source/test; focused build/test evidence recorded; independent Sol Medium review `APPROVED`; `fix(bundles): BLC-001 support net48 document key validation` |
 | [BLC-002](bundle-load-ci-artifacts-tickets/BLC-002.md) | Pinned SDK assertion scope | Plan amended; repeat review pending | Not implemented/approved |
 | [BLC-003](bundle-load-ci-artifacts-tickets/BLC-003.md) | Real document/decompiler regression gate | Plan amended; repeat review pending | Not implemented/approved |
 | [BLC-004](bundle-load-ci-artifacts-tickets/BLC-004.md) | Validated archives and Release publication | Plan amended; repeat review pending | Not implemented/approved |
