@@ -16,7 +16,7 @@ Confirmed findings:
 - A Windows runtime diagnostic using existing Debug binaries returns `BundleDsDocument` and activates `Hand2Note.dll`. Existing integration tests incorrectly seek `dnSpy.Decompiler.ILSpy.Core.CSharp.DecompilerProvider` in `dnSpy.Decompiler.ILSpy.x`; the type is in `dnSpy.Decompiler.ILSpy.Core`. Debug providers also contain multiple C# variants, so select the normal decompiler by `UniqueGuid == DecompilerConstants.LANGUAGE_CSHARP_ILSPY`.
 - The completed temporary Windows diagnostic composes the actual document service and providers through MEF, opens the original Hand2Note executable, and invokes the existing C# decompiler: `Provider=BundleDsDocument entries=136`, `Module=Hand2Note types=36`, assembly output 1157 characters, selected type output 4929 characters, error probe false. The harness built with zero warnings/errors. This bounded success does not establish the cause or resolution of the user's still-unreproduced UI failure, or support for every application method.
 - The existing ordinary regression helper exports its settings as `System.Object`, so MEF rejects the service; the test must provide the real settings contract's export type identity. Existing body-text assertions also incorrectly target assembly-level decompiler output; assert headers there and decompile the `Program` type for body text. These defects affect tests, not the production provider.
-- The workflow builds four product variants but has no integration-test gate and no Release publication. Three modern build archives were produced by the failing run; the .NET Framework archive was not.
+- Before this delivery, the workflow built four product variants but had no integration-test gate and no Release publication. Three modern build archives were produced by the failing run; the .NET Framework archive was not.
 
 ## Inspected architecture and narrow seams
 
@@ -39,11 +39,11 @@ Non-goals: parser replacement, third-party packer support, Hand2Note modificatio
 
 ## Assumptions and environmental boundaries
 
-The repository is `/home/ramon/netspy/dnSpy`, not its parent. Current dirty worktree ownership:
+The repository is `/home/ramon/netspy/dnSpy`, not its parent. Final repository ownership and preserved dirty worktree state:
 
-- `Extensions/dnSpy.Bundles/BundleDocumentKey.cs` (the compatible Enum substitution) and new `Tests/dnSpy.Bundles.IntegrationTests/BundleDocumentKeyTests.cs` are already-started BLC-001 work, explicitly authorized for Luna to adopt, inspect and verify against BLC-001. They are not unrelated changes to discard or exclude.
+- `Extensions/dnSpy.Bundles/BundleDocumentKey.cs` (the compatible Enum substitution) and new `Tests/dnSpy.Bundles.IntegrationTests/BundleDocumentKeyTests.cs` were adopted, inspected, verified, and committed as BLC-001 in `9ce23a473`; they are not current dirty worktree content.
 - The `build.ps1` executable-bit change and untracked `Tests/dnSpy.Bundles.IntegrationTests/BundleLogicalEquivalenceTests.cs`, `IntegrationFixtureLocator.cs`, and `OrdinaryOpenSaveRegressionTests.cs` are pre-existing, non-BLC-owned work. Never edit or stage these four paths in any BLC ticket.
-- BLC-001, BLC-002, and BLC-003 are committed in the ledger below. BLC-004 completion stages only its six owned implementation paths plus this master spec and the BLC-004 ticket evidence, using explicit path arguments. Inspect `git diff --cached --name-status` and the full cached diff before committing; include only reviewed BLC-004 changes. Do not use `git add .`, `git add -A`, directory-wide staging or `git commit -a`. Leave unrelated work and any unrelated index entries untouched; the pre-existing `build.ps1` mode change and three untracked integration helpers remain excluded and untouched.
+- BLC-001, BLC-002, and BLC-003 are committed in the ledger below. BLC-004 commit `2f7b01312600d09cb0930b5d052410634d26c858` contains its six owned implementation paths, this master spec, and the BLC-001 through BLC-004 ticket evidence updates. The pre-existing `build.ps1` mode change and three untracked integration helpers remained excluded and untouched.
 
 Git identity is configured.
 
