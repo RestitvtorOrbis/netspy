@@ -248,3 +248,49 @@ jobs:
         run: |
           $env:DNSPY_BUNDLE_FIXTURES = (Resolve-Path 'Tests/TestAssets/SingleFile/artifacts/historical').Path
           dotnet test Tests/dnSpy.Bundles.Tests/dnSpy.Bundles.Tests.csproj -c Release -f net10.0 --filter FullyQualifiedName~HistoricalPublishedBundleTests
+
+  bundle-integration-tests:
+    name: Bundle integration tests
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-dotnet@v6.0.0
+        with:
+          dotnet-version: 10.0.111
+          dotnet-quality: ga
+
+      - uses: microsoft/setup-msbuild@v3.0.0
+
+      - name: Generate modern regression fixtures
+        run: |
+          & .\Tests\TestAssets\SingleFile\Generate-ModernFixtures.ps1
+          if ($LASTEXITCODE -ne 0) {
+            throw "Modern fixture generation failed with exit code $LASTEXITCODE."
+          }
+
+      - name: Restore bundle integration tests
+        run: |
+          msbuild Tests/dnSpy.Bundles.IntegrationTests/dnSpy.Bundles.IntegrationTests.csproj -nologo -m -t:Restore -p:Configuration=Release
+          if ($LASTEXITCODE -ne 0) {
+            throw "Bundle integration test restore failed with exit code $LASTEXITCODE."
+          }
+
+      - name: Build bundle integration tests
+        run: |
+          msbuild Tests/dnSpy.Bundles.IntegrationTests/dnSpy.Bundles.IntegrationTests.csproj -nologo -m -t:Build -p:Configuration=Release -p:TargetFramework=net10.0-windows
+          if ($LASTEXITCODE -ne 0) {
+            throw "Bundle integration test build failed with exit code $LASTEXITCODE."
+          }
+
+      - name: Run bundle integration tests
+        run: |
+          dotnet test Tests/dnSpy.Bundles.IntegrationTests/dnSpy.Bundles.IntegrationTests.csproj -c Release -f net10.0-windows --no-build --no-restore --filter 'FullyQualifiedName~BundleDocumentKeyTests|FullyQualifiedName~BundleDocumentProviderTests|FullyQualifiedName~BundleManagedDocumentTests|FullyQualifiedName~BundleDecompilerAnalyzerTests|FullyQualifiedName~OrdinaryLoadingDecompilerRegressionTests|FullyQualifiedName~BundleOpenPipelineTests'
+          if ($LASTEXITCODE -ne 0) {
+            throw "Bundle integration tests failed with exit code $LASTEXITCODE."
+          }

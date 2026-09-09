@@ -2,16 +2,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 using System;
-using System.Collections;
-using System.ComponentModel.Composition;
-using System.ComponentModel.Composition.Hosting;
 using System.IO;
-using System.Linq;
-using System.Reflection;
 using dnSpy.Bundles.Extension;
 using dnSpy.Contracts.Decompiler;
 using dnSpy.Contracts.Documents;
-using dnSpy.Decompiler;
 using dnlib.DotNet;
 using dnlib.DotNet.Emit;
 using dnlib.PE;
@@ -25,10 +19,10 @@ namespace dnSpy.Bundles.IntegrationTests {
 			string dll = Copy(source, ".dll");
 			string exe = CreateManagedExecutable();
 			try {
-				using var composition = DocumentServiceComposition.Create();
-				IDecompiler decompiler = CreateCSharpDecompiler();
+				using var support = BundlePipelineTestSupport.Create();
+				IDecompiler decompiler = support.CSharpDecompiler;
 				foreach (string filename in new[] { dll, exe }) {
-					IDsDocument? raw = composition.Service.TryGetOrCreate(
+					IDsDocument? raw = support.DocumentService.TryGetOrCreate(
 						DsDocumentInfo.CreateDocument(filename));
 					var document = Assert.IsType<DsDotNetDocument>(raw);
 					try {
@@ -37,14 +31,19 @@ namespace dnSpy.Bundles.IntegrationTests {
 						Assert.NotNull(assembly);
 						var output = new StringBuilderDecompilerOutput();
 						decompiler.Decompile(assembly!, output, new DecompilationContext());
-						string decompiled = output.GetText();
+						string decompiledHeader = output.GetText();
 						if (StringComparer.OrdinalIgnoreCase.Equals(filename, exe)) {
-							Assert.Contains("OrdinaryExecutable", decompiled, StringComparison.Ordinal);
-							Assert.Contains("Console.WriteLine", decompiled, StringComparison.Ordinal);
-							Assert.Contains("ORDINARY_EXE", decompiled, StringComparison.Ordinal);
+							Assert.Contains("OrdinaryExecutable", decompiledHeader, StringComparison.Ordinal);
+							TypeDef executableType = BundlePipelineTestSupport.FindMethodBearingType(
+								document.ModuleDef!, "Program");
+							Assert.Contains(executableType.Methods, a => a.HasBody);
+							var typeOutput = BundlePipelineTestSupport.DecompileType(decompiler, executableType);
+							string decompiledBody = typeOutput.GetText();
+							Assert.Contains("Console.WriteLine", decompiledBody, StringComparison.Ordinal);
+							Assert.Contains("ORDINARY_EXE", decompiledBody, StringComparison.Ordinal);
 						}
 						else
-							Assert.Contains("dnSpy.Bundles", decompiled, StringComparison.Ordinal);
+							Assert.Contains("dnSpy.Bundles", decompiledHeader, StringComparison.Ordinal);
 					}
 					finally {
 						document.Dispose();
@@ -55,19 +54,6 @@ namespace dnSpy.Bundles.IntegrationTests {
 				Delete(dll);
 				Delete(exe);
 			}
-		}
-
-		static IDecompiler CreateCSharpDecompiler() {
-			Assembly assembly = Assembly.Load("dnSpy.Decompiler.ILSpy.x");
-			Type providerType = assembly.GetType(
-				"dnSpy.Decompiler.ILSpy.Core.CSharp.DecompilerProvider", true)!;
-			object provider = Activator.CreateInstance(providerType,
-				BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-				null, Array.Empty<object>(), null)!;
-			MethodInfo create = providerType.GetMethod("Create",
-				BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!;
-			return ((IEnumerable)create.Invoke(provider, null)!).Cast<IDecompiler>()
-				.Single(a => a.GenericNameUI == DecompilerConstants.GENERIC_NAMEUI_CSHARP);
 		}
 
 		static string Copy(string source, string extension) {
@@ -114,35 +100,5 @@ namespace dnSpy.Bundles.IntegrationTests {
 			catch (UnauthorizedAccessException) { }
 		}
 
-		sealed class DocumentServiceComposition : IDisposable {
-			readonly CompositionContainer container;
-
-			DocumentServiceComposition(CompositionContainer container, IDsDocumentService service) {
-				this.container = container;
-				Service = service;
-			}
-
-			public IDsDocumentService Service { get; }
-
-			public static DocumentServiceComposition Create() {
-				Assembly product = Assembly.Load("dnSpy");
-				Type serviceType = product.GetType("dnSpy.Documents.DsDocumentService", true)!;
-				Type providerType = product.GetType("dnSpy.Documents.DefaultDsDocumentProvider", true)!;
-				Type settingsType = product.GetType("dnSpy.Documents.DsDocumentServiceSettings", true)!;
-				Type settingsContractType = product.GetType("dnSpy.Documents.IDsDocumentServiceSettings", true)!;
-				object settings = Activator.CreateInstance(settingsType)!;
-				var defaultProvider = (IDsDocumentProvider)Activator.CreateInstance(providerType)!;
-				var container = new CompositionContainer(new TypeCatalog(serviceType));
-				var batch = new CompositionBatch();
-				AttributedModelServices.AddExportedValue(batch, settingsContractType.FullName!, settings);
-				batch.AddExportedValue<IDsDocumentProvider>(new BundleDsDocumentProvider());
-				batch.AddExportedValue<IDsDocumentProvider>(defaultProvider);
-				container.Compose(batch);
-				return new DocumentServiceComposition(container,
-					container.GetExportedValue<IDsDocumentService>()!);
-			}
-
-			public void Dispose() => container.Dispose();
-		}
 	}
 }

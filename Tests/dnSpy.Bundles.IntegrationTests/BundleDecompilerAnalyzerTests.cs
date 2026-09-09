@@ -14,7 +14,6 @@ using dnSpy.Contracts.Decompiler;
 using dnSpy.Contracts.Documents;
 using dnSpy.Contracts.Documents.Tabs.DocViewer;
 using dnSpy.Contracts.Documents.TreeView;
-using dnSpy.Contracts.Text;
 using dnlib.DotNet;
 using dnlib.DotNet.Emit;
 using Xunit;
@@ -44,20 +43,29 @@ namespace dnSpy.Bundles.IntegrationTests {
 			Assert.All(entries, a => Assert.Null(a.ManagedDocument));
 			Assert.Empty(reads);
 
+			BundleEntryDocument app = entries.Single(a => a.Entry.RelativePath == "SingleFile.App.dll");
 			var provider = new BundleDocumentNodeProvider();
-			DsDocumentNode appNode = provider.Create(null!, null, entries.Single(a =>
-				a.Entry.RelativePath == "SingleFile.App.dll"))!;
-			var decompileContext = new TestDecompileNodeContext(CreateCSharpDecompiler());
+			DsDocumentNode appNode = provider.Create(null!, null, app)!;
+			IDecompiler decompiler = BundlePipelineTestSupport.CreateCSharpDecompiler();
+			var decompileContext = new BundleDecompileNodeContext(decompiler);
 			Assert.True(((IDecompileSelf)appNode).Decompile(decompileContext));
-			string decompiled = decompileContext.Output.GetText();
-			Assert.Contains("SingleFile.App", decompiled, StringComparison.Ordinal);
-			Assert.Contains("Console.WriteLine", decompiled, StringComparison.Ordinal);
-			Assert.Contains("BUNDLE_VALUE=", decompiled, StringComparison.Ordinal);
-			Assert.DoesNotContain("The decompiler extension wasn't built", decompiled,
+			string decompiledHeader = decompileContext.Output.GetText();
+			Assert.Contains("SingleFile.App", decompiledHeader, StringComparison.Ordinal);
+			Assert.DoesNotContain("The decompiler extension wasn't built", decompiledHeader,
 				StringComparison.Ordinal);
-			Assert.Equal(1, reads[entries.Single(a => a.Entry.RelativePath == "SingleFile.App.dll").Entry.Index]);
-			Assert.DoesNotContain(entries, a => a.Entry.RelativePath != "SingleFile.App.dll" &&
+			Assert.Equal(1, reads[app.Entry.Index]);
+			Assert.DoesNotContain(entries, a => a.Entry.RelativePath != app.Entry.RelativePath &&
 				reads.ContainsKey(a.Entry.Index));
+
+			BundleModuleDocument appModule = app.CreateManagedDocument();
+			TypeDef appType = BundlePipelineTestSupport.FindMethodBearingType(appModule.ModuleDef!, "Program");
+			Assert.Contains(appType.Methods, a => a.HasBody);
+			var bodyOutput = BundlePipelineTestSupport.DecompileType(decompiler, appType);
+			string decompiledBody = bodyOutput.GetText();
+			Assert.Contains("Console.WriteLine", decompiledBody, StringComparison.Ordinal);
+			Assert.Contains("BUNDLE_VALUE=", decompiledBody, StringComparison.Ordinal);
+			Assert.DoesNotContain("The decompiler extension wasn't built", decompiledBody,
+				StringComparison.Ordinal);
 
 			BundleEntryDocument dependency = entries.Single(a =>
 				a.Entry.RelativePath == "SingleFile.Dependency.dll");
@@ -148,19 +156,6 @@ namespace dnSpy.Bundles.IntegrationTests {
 				Assert.Null(a.ManagedDocument));
 		}
 
-		static IDecompiler CreateCSharpDecompiler() {
-			Assembly assembly = LoadExtensionAssembly("dnSpy.Decompiler.ILSpy.x");
-			Type providerType = assembly.GetType(
-				"dnSpy.Decompiler.ILSpy.Core.CSharp.DecompilerProvider", true)!;
-			object provider = Activator.CreateInstance(providerType,
-				BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-				null, Array.Empty<object>(), null)!;
-			MethodInfo create = providerType.GetMethod("Create",
-				BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!;
-			return ((IEnumerable)create.Invoke(provider, null)!).Cast<IDecompiler>()
-				.Single(a => a.GenericNameUI == DecompilerConstants.GENERIC_NAMEUI_CSHARP);
-		}
-
 		static Assembly LoadExtensionAssembly(string simpleName) {
 			try {
 				return Assembly.Load(simpleName);
@@ -197,16 +192,5 @@ namespace dnSpy.Bundles.IntegrationTests {
 			throw new InvalidOperationException("The generated compressed net10 bundle fixture is missing.");
 		}
 
-		sealed class TestDecompileNodeContext : IDecompileNodeContext {
-			public TestDecompileNodeContext(IDecompiler decompiler) => Decompiler = decompiler;
-			public StringBuilderDecompilerOutput Output { get; } = new StringBuilderDecompilerOutput();
-			IDecompilerOutput IDecompileNodeContext.Output => Output;
-			public IDocumentWriterService DocumentWriterService => null!;
-			public IDecompiler Decompiler { get; }
-			public DecompilationContext DecompilationContext { get; } = new DecompilationContext();
-			public Microsoft.VisualStudio.Utilities.IContentType? ContentType { get; set; }
-			public string? ContentTypeString { get; set; }
-			public T UIThread<T>(Func<T> func) => func();
-		}
 	}
 }
