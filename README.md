@@ -16,10 +16,15 @@ See below for more features
 
 ## Binaries
 
-Latest stable release: https://github.com/dnSpyEx/dnSpy/releases
+Download netSpy builds from this repository's [Releases](https://github.com/RestitvtorOrbis/netspy/releases). If a suitable release asset is not available, use the [Actions](https://github.com/RestitvtorOrbis/netspy/actions) fallback and download the matching `dnSpy-*` artifact from a successful build run.
 
-If you like living on the edge you can use the latest "beta" builds from:
-[![](https://github.com/dnSpyEx/dnSpy/workflows/GitHub%20CI/badge.svg)](https://github.com/dnSpyEx/dnSpy/actions)
+Extract the complete archive directory together; do not copy only `dnSpy.exe`. For the reported Windows x64 case, choose `netSpy-net-win64.zip`, the self-contained x64 package. The other variants are:
+
+- `netSpy-netframework.zip` requires .NET Framework 4.8.
+- `netSpy-net.zip` requires the .NET 10 Desktop Runtime.
+- `netSpy-net-win32.zip` is the self-contained x86 package.
+
+The executable inside each netSpy archive remains `dnSpy.exe`. After extraction, launch it, open the official .NET single-file bundle, expand `Assemblies`, and select its main DLL or a type to inspect or decompile. This support does not claim that every method will decompile and does not cover third-party packers.
 
 ## Building
 

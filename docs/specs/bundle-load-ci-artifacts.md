@@ -1,6 +1,6 @@
 # Bundle loading verification, CI repair, and downloadable builds
 
-Status: BLC-001, BLC-002, and BLC-003 approved and committed; delivery continues through BLC-004. Baseline: `0ceb3fb5ec19feb396f13a32dd36a0c34c4bf7b7`.
+Status: BLC-001 through BLC-004 approved and committed locally. BLC-004 received final Sol Medium approval after four review fixes. Baseline: `0ceb3fb5ec19feb396f13a32dd36a0c34c4bf7b7`.
 
 ## Requirements and evidence
 
@@ -43,7 +43,7 @@ The repository is `/home/ramon/netspy/dnSpy`, not its parent. Current dirty work
 
 - `Extensions/dnSpy.Bundles/BundleDocumentKey.cs` (the compatible Enum substitution) and new `Tests/dnSpy.Bundles.IntegrationTests/BundleDocumentKeyTests.cs` are already-started BLC-001 work, explicitly authorized for Luna to adopt, inspect and verify against BLC-001. They are not unrelated changes to discard or exclude.
 - The `build.ps1` executable-bit change and untracked `Tests/dnSpy.Bundles.IntegrationTests/BundleLogicalEquivalenceTests.cs`, `IntegrationFixtureLocator.cs`, and `OrdinaryOpenSaveRegressionTests.cs` are pre-existing, non-BLC-owned work. Never edit or stage these four paths in any BLC ticket.
-- This plan amendment edits only the five committed plan Markdown files; it stages nothing and creates no commit. During later BLC-001 delivery, after independent approval, Luna may stage exactly the two adopted files plus `docs/specs/bundle-load-ci-artifacts.md` and `docs/specs/bundle-load-ci-artifacts-tickets/BLC-001.md` with explicit path arguments. Inspect `git diff --cached --name-status` and the full cached diff before committing; include only reviewed BLC-001 changes. Do not use `git add .`, `git add -A`, directory-wide staging or `git commit -a`. Leave unrelated work and any unrelated index entries untouched; an index containing unrelated staged work blocks the ticket commit until isolated without discarding it. Later tickets stage only their own reviewed paths and evidence documents.
+- BLC-001, BLC-002, and BLC-003 are committed in the ledger below. BLC-004 completion stages only its six owned implementation paths plus this master spec and the BLC-004 ticket evidence, using explicit path arguments. Inspect `git diff --cached --name-status` and the full cached diff before committing; include only reviewed BLC-004 changes. Do not use `git add .`, `git add -A`, directory-wide staging or `git commit -a`. Leave unrelated work and any unrelated index entries untouched; the pre-existing `build.ps1` mode change and three untracked integration helpers remain excluded and untouched.
 
 Git identity is configured.
 
@@ -53,14 +53,14 @@ GitHub credentials currently fail authentication. This does not block local code
 
 ## Dependency graph and ticket ledger
 
-Execute sequentially: BLC-001 → BLC-002 → BLC-003 → BLC-004. Each implementation has its own independent review and local conventional commit, after the dedicated plan-documentation commit. That commit received CHANGES_REQUIRED; these amendments await repeat review and do not constitute implementation approval.
+Execute sequentially: BLC-001 → BLC-002 → BLC-003 → BLC-004. Each implementation has its own independent review and local conventional commit, after the dedicated plan-documentation commit. All four implementation tickets are now approved and committed locally; remote workflow and Release acceptance remains pending.
 
 | Ticket | Outcome | Status | Evidence / commit |
 |---|---|---|---|
-| [BLC-001](bundle-load-ci-artifacts-tickets/BLC-001.md) | .NET Framework enum compatibility | Approved; committed | Adopted source/test; focused build/test evidence recorded; independent Sol Medium review `APPROVED`; `fix(bundles): BLC-001 support net48 document key validation` |
-| [BLC-002](bundle-load-ci-artifacts-tickets/BLC-002.md) | Pinned SDK assertion scope | Approved; committed | Workflow fix and fixture evidence recorded; independent Sol Medium repeat review `APPROVED`; `fix(ci): BLC-002 select fixture SDKs from pinned directories` |
-| [BLC-003](bundle-load-ci-artifacts-tickets/BLC-003.md) | Real document/decompiler regression gate | Approved; committed | Real MEF/document/decompiler tests, ordinary DLL/EXE regression, and Windows gate; independent Sol Medium review `APPROVED`; `test(bundles): BLC-003 gate real document loading and decompilation` |
-| [BLC-004](bundle-load-ci-artifacts-tickets/BLC-004.md) | Validated archives and Release publication | Plan amended; repeat review pending | Not implemented/approved |
+| [BLC-001](bundle-load-ci-artifacts-tickets/BLC-001.md) | .NET Framework enum compatibility | Approved; committed | Commit `9ce23a473`; adopted source/test; focused evidence recorded; independent Sol Medium review `APPROVED`. |
+| [BLC-002](bundle-load-ci-artifacts-tickets/BLC-002.md) | Pinned SDK assertion scope | Approved; committed | Commit `69f8fab12`; workflow fix and fixture evidence recorded; independent Sol Medium repeat review `APPROVED`. |
+| [BLC-003](bundle-load-ci-artifacts-tickets/BLC-003.md) | Real document/decompiler regression gate | Approved; committed | Commit `5d4bac8bf`; real MEF/document/decompiler tests, ordinary DLL/EXE regression, and Windows gate; independent Sol Medium review `APPROVED`. |
+| [BLC-004](bundle-load-ci-artifacts-tickets/BLC-004.md) | Validated archives and Release publication | Approved; delivered locally; remote publication pending | This commit (`ci(release): BLC-004 publish validated netSpy build archives`); final Sol Medium review `APPROVED` after four review fixes; exact local evidence and limitations recorded in the ticket. |
 
 ## Acceptance and exact final verification
 
@@ -87,4 +87,4 @@ git log -5 --oneline
 
 Run the maximum available subset locally and record missing SDKs, Windows build tools, runtime limitations, network failures, and missing authorization/authentication separately from test failures. On Windows CI the focused integration gate is mandatory, even if it could not run locally. When authenticated remote execution is possible: push only authorized commits/ref, dispatch `build.yml` on that ref if necessary, use `gh run watch <run-id> --repo RestitvtorOrbis/netspy --exit-status`, verify the run's `headSha` equals the implementation SHA, and verify all four zip assets and checksum file on the expected Release. Pending remote acceptance is reported as pending, never inferred from workflow text.
 
-Final acceptance requires evidence for enum semantics, .NET Framework compilation or explicit environmental limitation, SDK selections from generation directories, generated compressed bundle decompilation through the real document pipeline, ordinary DLL/EXE regression, original real-file nonmutation, complete archives, and credential-free executable Release orchestration verification (BLC-004), including partial-publication resume and rejection before mutation. A local implementation can be delivered while authenticated remote publication remains explicitly unfulfilled.
+Final acceptance requires evidence for enum semantics, .NET Framework compilation or explicit environmental limitation, SDK selections from generation directories, generated compressed bundle decompilation through the real document pipeline, ordinary DLL/EXE regression, original real-file nonmutation, complete archives, and credential-free executable Release orchestration verification (BLC-004), including partial-publication resume and rejection before mutation. BLC-004 local packaging/orchestration checks passed; Windows/MSBuild, GitHub Actions, and remote publication were not run locally, so no remote publication success is claimed.

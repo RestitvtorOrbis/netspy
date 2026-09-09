@@ -8,8 +8,11 @@ on:
       - master
   release:
     types:
-      - released
+      - published
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -79,17 +82,29 @@ jobs:
       - name: Build dnSpy (${{matrix.platform}})
         run: .\build.ps1 ${{matrix.platform}}
 
-      - name: Create output directory
-        run: New-Item -ItemType Directory -Path C:\builtfiles\dnSpy-${{matrix.platform}} -Force > $null
-
-      - name:  Copy release files for upload
-        run: Copy-Item -Path dnSpy\dnSpy\bin\Release\${{matrix.build-dir}}\* -Destination C:\builtfiles\dnSpy-${{matrix.platform}} -Recurse
+      - name: Create release archive
+        env:
+          BUILD_DIRECTORY: dnSpy\dnSpy\bin\Release\${{ matrix.build-dir }}
+          OUTPUT_DIRECTORY: artifacts\packages\${{ matrix.package-name }}
+          PACKAGE_NAME: ${{ matrix.package-name }}
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          & .\Build\New-ReleaseArchive.ps1 `
+            -BuildDirectory $env:BUILD_DIRECTORY `
+            -OutputDirectory $env:OUTPUT_DIRECTORY `
+            -PackageName $env:PACKAGE_NAME `
+            -SourceCommit $env:SOURCE_COMMIT
+          if ($LASTEXITCODE -ne 0) {
+            throw "Release archive creation failed with exit code $LASTEXITCODE."
+          }
 
       - uses: actions/upload-artifact@v7.0.1
-        if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/')
         with:
           name: dnSpy-${{matrix.package-name}}
-          path: C:\builtfiles\dnSpy-${{matrix.platform}}
+          path: |
+            artifacts/packages/${{ matrix.package-name }}/netSpy-${{ matrix.package-name }}.zip
+            artifacts/packages/${{ matrix.package-name }}/netSpy-${{ matrix.package-name }}.zip.sha256
+            artifacts/packages/${{ matrix.package-name }}/netSpy-${{ matrix.package-name }}.zip.source.txt
           if-no-files-found: error
           compression-level: 9
 
@@ -293,4 +308,83 @@ jobs:
           dotnet test Tests/dnSpy.Bundles.IntegrationTests/dnSpy.Bundles.IntegrationTests.csproj -c Release -f net10.0-windows --no-build --no-restore --filter 'FullyQualifiedName~BundleDocumentKeyTests|FullyQualifiedName~BundleDocumentProviderTests|FullyQualifiedName~BundleManagedDocumentTests|FullyQualifiedName~BundleDecompilerAnalyzerTests|FullyQualifiedName~OrdinaryLoadingDecompilerRegressionTests|FullyQualifiedName~BundleOpenPipelineTests'
           if ($LASTEXITCODE -ne 0) {
             throw "Bundle integration tests failed with exit code $LASTEXITCODE."
+          }
+
+      - name: Test release packaging
+        run: |
+          pwsh -NoProfile -File .\Build\Test-ReleasePackaging.ps1
+          if ($LASTEXITCODE -ne 0) {
+            throw "Release packaging test failed with exit code $LASTEXITCODE."
+          }
+
+      - name: Test release publication
+        run: |
+          pwsh -NoProfile -File .\Build\Test-ReleasePublication.ps1
+          if ($LASTEXITCODE -ne 0) {
+            throw "Release publication test failed with exit code $LASTEXITCODE."
+          }
+
+  publish-release:
+    name: Publish release
+    needs: [build, historical-bundle-tests, bundle-integration-tests]
+    if: ${{ success() && ((github.event_name == 'release' && github.event.action == 'published') || (github.event_name == 'push' && github.ref == 'refs/heads/master') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master')) }}
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: release-${{ github.repository }}-${{ github.event_name == 'release' && github.event.release.tag_name || format('build-{0}', github.sha) }}
+      cancel-in-progress: false
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          submodules: false
+
+      - uses: actions/download-artifact@v7.0.1
+        with:
+          name: dnSpy-netframework
+          path: artifacts/packages/netframework
+
+      - uses: actions/download-artifact@v7.0.1
+        with:
+          name: dnSpy-net
+          path: artifacts/packages/net
+
+      - uses: actions/download-artifact@v7.0.1
+        with:
+          name: dnSpy-net-win32
+          path: artifacts/packages/net-win32
+
+      - uses: actions/download-artifact@v7.0.1
+        with:
+          name: dnSpy-net-win64
+          path: artifacts/packages/net-win64
+
+      - name: Publish validated release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action || 'none' }}
+          REF: ${{ github.ref }}
+          SOURCE_COMMIT: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ARTIFACT_DIRECTORY: artifacts/packages
+          RELEASE_TAG: ${{ github.event.release.tag_name || '' }}
+          RELEASE_ID: ${{ github.event.release.id || '' }}
+        run: |
+          & pwsh -NoProfile -File .\Build\Publish-Release.ps1 `
+            -EventName $env:EVENT_NAME `
+            -EventAction $env:EVENT_ACTION `
+            -Ref $env:REF `
+            -SourceCommit $env:SOURCE_COMMIT `
+            -Repository $env:REPOSITORY `
+            -RunUrl $env:RUN_URL `
+            -ArtifactDirectory $env:ARTIFACT_DIRECTORY `
+            -ReleaseTag $env:RELEASE_TAG `
+            -ReleaseId $env:RELEASE_ID
+          if ($LASTEXITCODE -ne 0) {
+            throw "Release publication failed with exit code $LASTEXITCODE."
           }
