@@ -54,7 +54,9 @@ namespace dnSpy.Bundles.IntegrationTests {
 			Assert.Equal(filename + "!/SingleFile.App.dll", module.Filename);
 			Assert.Equal("SingleFile.App.dll", module.BundleRelativePath);
 			Assert.Equal(BundleDocumentKey.Module(filename, "SingleFile.App.dll"), module.Key);
-			Assert.Same(module.ModuleDef, selected.ModuleDef);
+			Assert.Null(selected.ModuleDef);
+			Assert.Same(module.ModuleDef, selected.ManagedDocument!.ModuleDef);
+			Assert.Same(module, selected.CreateManagedDocument());
 		}
 
 		[Fact]
@@ -304,7 +306,7 @@ namespace dnSpy.Bundles.IntegrationTests {
 			}
 		}
 
-		public sealed class NodeContextProxy : DispatchProxy {
+		public class NodeContextProxy : DispatchProxy {
 			public IDocumentTreeView View { get; set; } = null!;
 
 			protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) {
@@ -314,7 +316,7 @@ namespace dnSpy.Bundles.IntegrationTests {
 			}
 		}
 
-		public sealed class TreeViewProxy : DispatchProxy {
+		public class TreeViewProxy : DispatchProxy {
 			IDocumentTreeNodeDataContext context = null!;
 			readonly BundleDocumentNodeProvider bundleProvider = new BundleDocumentNodeProvider();
 			readonly IDsDocumentNodeProvider defaultProvider;

@@ -291,7 +291,7 @@ namespace dnSpy.Bundles.IntegrationTests {
 			return source.ModuleDef!.Context!.AssemblyResolver.Resolve(request, source.ModuleDef);
 		}
 
-		public sealed class DocumentServiceProxy : DispatchProxy {
+		public class DocumentServiceProxy : DispatchProxy {
 			public IDsDocument? FindResult { get; set; }
 			public int FindCalls { get; private set; }
 			protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) {

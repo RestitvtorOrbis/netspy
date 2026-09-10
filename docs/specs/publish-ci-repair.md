@@ -33,7 +33,7 @@ Execute sequentially: PCI-01 → PCI-02 → PCI-03 → PCI-04. Each has a separa
 |---|---|---|
 | [PCI-01: archive process boundary](publish-ci-repair-tickets/PCI-01.md) | approved | `fix(ci): PCI-01 use process exit status for release archives` |
 | [PCI-02: historical fixture compatibility](publish-ci-repair-tickets/PCI-02.md) | approved | `fix(fixtures): PCI-02 support historical SDK output contracts` |
-| [PCI-03: integration harness contracts](publish-ci-repair-tickets/PCI-03.md) | planned | pending |
+| [PCI-03: integration harness contracts](publish-ci-repair-tickets/PCI-03.md) | approved | `test(bundles): PCI-03 correct integration harness contracts` |
 | [PCI-04: lazy header resolution](publish-ci-repair-tickets/PCI-04.md) | planned | pending |
 
 ## Acceptance and final verification

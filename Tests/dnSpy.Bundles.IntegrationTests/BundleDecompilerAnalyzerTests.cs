@@ -147,8 +147,9 @@ namespace dnSpy.Bundles.IntegrationTests {
 
 			var root = new BundleDocumentNodeProvider().Create(null!, null, document)!;
 			var nodes = root.CreateChildren().SelectMany(a => a.CreateChildren()).ToArray();
+			IDecompiler decompiler = BundlePipelineTestSupport.CreateCSharpDecompiler();
 			foreach (DsDocumentNode node in nodes)
-				_ = node.ToString();
+				_ = node.ToString(decompiler);
 
 			Assert.NotEmpty(nodes);
 			Assert.Empty(reads);

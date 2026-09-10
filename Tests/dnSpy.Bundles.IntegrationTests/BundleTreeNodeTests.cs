@@ -60,10 +60,11 @@ namespace dnSpy.Bundles.IntegrationTests {
 			var root = provider.Create(null!, null, document);
 			Assert.NotNull(root);
 			var nodes = root.CreateChildren().SelectMany(a => a.CreateChildren()).ToArray();
+			IDecompiler decompiler = BundlePipelineTestSupport.CreateCSharpDecompiler();
 
 			// Managed assembly nodes now have an assembly shape, but their metadata document keeps
 			// activation explicit. Rendering the inventory must not touch the lazy cache.
-			Assert.All(nodes, node => _ = node.ToString());
+			Assert.All(nodes, node => _ = ((DocumentTreeNodeData)node).ToString(decompiler));
 			Assert.All(nodes.Select(a => (BundleEntryDocument)((DsDocumentNode)a).Document), entry =>
 				Assert.Null(entry.ManagedDocument));
 		}
@@ -75,10 +76,11 @@ namespace dnSpy.Bundles.IntegrationTests {
 				managedBytes, BundleTextViewOptions.Default, out var probe);
 			var provider = new BundleDocumentNodeProvider();
 			var root = provider.Create(null!, null, document)!;
+			IDecompiler decompiler = BundlePipelineTestSupport.CreateCSharpDecompiler();
 			foreach (var category in root.CreateChildren()) {
-				_ = category.ToString();
+				_ = ((DocumentTreeNodeData)category).ToString(decompiler);
 				foreach (var entry in category.CreateChildren())
-					_ = entry.ToString();
+					_ = ((DocumentTreeNodeData)entry).ToString(decompiler);
 			}
 
 			Assert.Equal(0, probe.OpenCount);
@@ -96,8 +98,9 @@ namespace dnSpy.Bundles.IntegrationTests {
 			var root = provider.Create(null!, null, document);
 			Assert.NotNull(root);
 			var nativeNode = root.CreateChildren().ElementAt(2).CreateChildren().Single();
+			IDecompiler decompiler = BundlePipelineTestSupport.CreateCSharpDecompiler();
 
-			string text = nativeNode.ToString();
+			string text = ((DocumentTreeNodeData)nativeNode).ToString(decompiler);
 			Assert.Contains("native/libnative.so", text, StringComparison.Ordinal);
 			Assert.IsAssignableFrom<IDecompileSelf>(nativeNode);
 		}

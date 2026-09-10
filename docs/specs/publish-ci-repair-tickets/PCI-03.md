@@ -39,4 +39,13 @@ Proxy classes are inheritable; detached rendering reaches production WriteCore; 
 
 ## Delivery contract
 
-Status: planned. Implement without committing; obtain independent review before orchestration updates this ticket and the master ledger and creates the expected local commit. Preserve all pre-existing changes listed in the master spec. Record actual commands/results and limitations here. Do not push or publish.
+Status: approved. The four test-only changes were implemented, independently reviewed by a read-only gpt-5.6-sol reviewer, and are ready for the expected local commit. Preserve all pre-existing changes listed in the master spec. Do not push or publish.
+
+## Delivery evidence
+
+- Changed paths: `Tests/dnSpy.Bundles.IntegrationTests/BundleManagedDocumentTests.cs`, `BundleAssemblyResolverTests.cs`, `BundleDecompilerAnalyzerTests.cs`, and `BundleTreeNodeTests.cs`.
+- The three requested `DispatchProxy` classes are unsealed with their constructors and dispatch behavior unchanged. The managed-entry test now asserts `selected.ModuleDef` is null, checks ownership through `selected.ManagedDocument.ModuleDef`, and checks repeated `CreateManagedDocument()` identity. Detached inventory rendering uses the existing explicit `ToString(IDecompiler, ...)` overload with the test C# decompiler and retains path and zero-read assertions.
+- Independent Sol review: `APPROVED`, no findings. The protected pre-existing `build.ps1` mode change and the three named untracked tests were excluded and remain unstaged.
+- `dotnet build Tests/dnSpy.Bundles.IntegrationTests/dnSpy.Bundles.IntegrationTests.csproj -c Release -p:EnableWindowsTargeting=true` passed with 0 errors and 6 nullable warnings.
+- `dotnet test Tests/dnSpy.Bundles.IntegrationTests/dnSpy.Bundles.IntegrationTests.csproj -c Release -f net10.0-windows --no-build --no-restore --filter 'FullyQualifiedName~BundleManagedDocumentTests|FullyQualifiedName~BundleTreeNodeTests|FullyQualifiedName~EnumeratingCompressedBundleInventoryDoesNotMaterializeUnexpandedEntries|FullyQualifiedName~BundleAssemblyResolverTests'` reached VSTest but aborted before execution because Linux lacks `Microsoft.WindowsDesktop.App 10.0.0`; no Windows execution is claimed.
+- `git diff --check` passed. Expected commit: `test(bundles): PCI-03 correct integration harness contracts`.
