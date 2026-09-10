@@ -165,7 +165,8 @@ namespace dnSpy.Bundles.IntegrationTests {
 
 			Assert.True(((IDecompileSelf)GetEntryNode(document, BundleFileType.RuntimeConfigJson)).Decompile(context));
 			string text = context.Output.GetText();
-			Assert.Equal(maximum, text.Count(a => a == 'b'));
+			Assert.Equal(new string('b', maximum) + Environment.NewLine +
+				"[Preview truncated at 8388608 bytes.]", text);
 			Assert.Contains("Preview truncated at 8388608 bytes", text, StringComparison.Ordinal);
 			Assert.Equal(maximum + 1, bytes.Length);
 			Assert.Equal(1, probe.OpenCount);

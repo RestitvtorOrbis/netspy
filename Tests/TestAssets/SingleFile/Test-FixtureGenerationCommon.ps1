@@ -1,5 +1,5 @@
 # Focused, Pester-free contract test for FixtureGeneration.Common.ps1.
-# This test uses an executable shim so no SDK or fixture project is required.
+# This test uses a command shim so no SDK or fixture project is required.
 
 [CmdletBinding()]
 param()
@@ -57,43 +57,20 @@ try {
 
     $logPath = Join-Path $testRoot 'dotnet-invocations.jsonl'
 
-    if ($IsWindows) {
-        $shimPath = Join-Path $testRoot 'dotnet.cmd'
-        $shimCommand = @'
-@echo off
-setlocal EnableExtensions EnableDelayedExpansion
->>"%SINGLE_FILE_FIXTURE_CONTRACT_LOG%" echo BEGIN
-:nextArgument
-if "%~1"=="" goto done
-if /I "%~1"=="--nologo" exit /b 2
->>"%SINGLE_FILE_FIXTURE_CONTRACT_LOG%" echo ARG:%~1
-shift
-goto nextArgument
-:done
->>"%SINGLE_FILE_FIXTURE_CONTRACT_LOG%" echo END
-exit /b 0
-'@
-        [IO.File]::WriteAllText($shimPath, $shimCommand)
-    }
-    else {
-        $shimPath = Join-Path $testRoot 'dotnet'
-        $shimCommand = @'
-#!/bin/sh
-log_path="$SINGLE_FILE_FIXTURE_CONTRACT_LOG"
-printf '%s\n' BEGIN >> "$log_path"
-for argument in "$@"; do
-    if [ "$argument" = "--nologo" ]; then
-        exit 2
-    fi
-    printf 'ARG:%s\n' "$argument" >> "$log_path"
-done
-printf '%s\n' END >> "$log_path"
+    # Use a PowerShell script shim on both platforms. cmd.exe treats '=' as an
+    # argument separator, so a .cmd shim cannot observe dotnet.exe arguments faithfully.
+    $shimPath = Join-Path $testRoot 'dotnet.ps1'
+    $shimCommand = @'
+$logPath = $env:SINGLE_FILE_FIXTURE_CONTRACT_LOG
+Add-Content -LiteralPath $logPath -Value 'BEGIN'
+foreach ($argument in $args) {
+    if ($argument -ceq '--nologo') { exit 2 }
+    Add-Content -LiteralPath $logPath -Value "ARG:$argument"
+}
+Add-Content -LiteralPath $logPath -Value 'END'
 exit 0
 '@
-        [IO.File]::WriteAllText($shimPath, $shimCommand)
-        & chmod +x $shimPath
-        Assert-Contract ($LASTEXITCODE -eq 0) "Could not make the dotnet shim executable."
-    }
+    [IO.File]::WriteAllText($shimPath, $shimCommand)
 
     $env:SINGLE_FILE_FIXTURE_CONTRACT_LOG = $logPath
     $env:PATH = $testRoot + [IO.Path]::PathSeparator + [string]$originalPath

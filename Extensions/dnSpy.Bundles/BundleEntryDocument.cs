@@ -41,7 +41,7 @@ namespace dnSpy.Bundles.Extension {
 		/// activates an entry and therefore remains null while the bundle tree is being rendered.
 		/// </summary>
 		public BundleModuleDocument? ManagedDocument {
-			get => BundleDocument.GetManagedDocument(this);
+			get => IsManaged ? BundleDocument.GetManagedDocument(this) : null;
 		}
 
 		/// <summary>

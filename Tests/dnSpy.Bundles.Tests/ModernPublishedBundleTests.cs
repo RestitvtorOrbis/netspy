@@ -6,6 +6,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using System.Security.Cryptography;
 using dnSpy.Bundles;
 using Xunit;
@@ -51,6 +53,20 @@ namespace dnSpy.Bundles.Tests {
 					Assert.Contains(bundle.Entries, entry => entry.FileType == BundleFileType.Symbols);
 				else
 					Assert.DoesNotContain(bundle.Entries, entry => entry.FileType == BundleFileType.Symbols);
+			}
+		}
+
+		[Fact]
+		public void PublishedAppsRetainReferenceToBundleDependency() {
+			foreach (ModernBundleFixture fixture in GetFixtures()) {
+				using BundleFile bundle = new BundleReader().Open(fixture.BundlePath).Bundle!;
+				BundleEntry main = Assert.Single(bundle.Entries,
+					entry => entry.RelativePath == "SingleFile.App.dll");
+				using var stream = new MemoryStream(main.ReadAllBytes(main.Size));
+				using var pe = new PEReader(stream);
+				MetadataReader metadata = pe.GetMetadataReader();
+				Assert.Single(metadata.AssemblyReferences, handle =>
+					metadata.GetString(metadata.GetAssemblyReference(handle).Name) == "SingleFile.Dependency");
 			}
 		}
 

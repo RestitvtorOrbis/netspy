@@ -3,6 +3,7 @@
 
 namespace SingleFile.Dependency {
 	public static class BundleValue {
-		public const string Value = "v1";
+		// A constant is inlined by the compiler and removes the app's assembly reference.
+		public static string Value => "v1";
 	}
 }
