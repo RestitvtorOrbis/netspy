@@ -38,4 +38,15 @@ Successful child process returns 0 even when caller exit state is unset/stale; r
 
 ## Delivery contract
 
-Status: planned. Implement without committing; obtain independent review before orchestration updates this ticket and the master ledger and creates the expected local commit. Preserve all pre-existing changes listed in the master spec. Record actual commands/results and limitations here. Do not push or publish.
+Status: approved. Preserve all pre-existing changes listed in the master spec. Do not push or publish.
+
+## Delivery evidence
+
+- Changed paths: `.github/workflows/build.yml`, `Build/Test-ReleasePackaging.ps1`.
+- Independent Sol review: `APPROVED`.
+- `pwsh -NoProfile -File Build/Test-ReleasePackaging.ps1`: passed; independently confirmed by the user, including the child boundary checks.
+- `pwsh -NoProfile -File Build/Test-ReleasePublication.ps1`: passed all 56 cases.
+- `git diff --check`: passed.
+- `pwsh -NoProfile -File build.ps1 all -NoMsbuild`: attempted and blocked at Product graph restore because this Linux environment lacks the Windows/MSBuild/WPF/COM prerequisites; no Windows execution is claimed.
+- `/tmp/netspy-34388893161.log`: unavailable.
+- Expected local commit: `fix(ci): PCI-01 use process exit status for release archives`.

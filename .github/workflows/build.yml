@@ -89,7 +89,7 @@ jobs:
           PACKAGE_NAME: ${{ matrix.package-name }}
           SOURCE_COMMIT: ${{ github.sha }}
         run: |
-          & .\Build\New-ReleaseArchive.ps1 `
+          & pwsh -NoProfile -File .\Build\New-ReleaseArchive.ps1 `
             -BuildDirectory $env:BUILD_DIRECTORY `
             -OutputDirectory $env:OUTPUT_DIRECTORY `
             -PackageName $env:PACKAGE_NAME `

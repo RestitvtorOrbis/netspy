@@ -75,6 +75,17 @@ $testRootLeaf = [System.IO.Path]::GetFileName($testRoot.TrimEnd([System.IO.Path]
 $testRootCreated = $false
 
 try {
+	$workflowPath = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\.github\workflows\build.yml'))
+	$workflowText = [System.IO.File]::ReadAllText($workflowPath)
+	$archiveStepMatch = [System.Text.RegularExpressions.Regex]::Match(
+		$workflowText,
+		'(?ms)^      - name: Create release archive\r?\n(?<body>.*?)(?=^      - uses: actions/upload-artifact@)'
+	)
+	Assert-True -Condition $archiveStepMatch.Success -Message 'Could not isolate the release archive workflow step.'
+	$archiveStepBody = $archiveStepMatch.Groups['body'].Value
+	Assert-True -Condition ($archiveStepBody -match '(?m)^\s*& pwsh -NoProfile -File \.\\Build\\New-ReleaseArchive\.ps1 `\r?$') -Message 'Workflow does not invoke release archiving through pwsh -NoProfile -File.'
+	Assert-True -Condition ($archiveStepBody -match '(?m)^\s*if \(\$LASTEXITCODE -ne 0\) \{\r?$') -Message 'Workflow release archive step lost its LASTEXITCODE check.'
+
 	Assert-True -Condition ($testRootLeaf -match '^dnspy-blc004-packaging-[0-9a-f]{32}$') -Message 'Test cleanup path is not narrowly named.'
 	[System.IO.Directory]::CreateDirectory($testRoot) | Out-Null
 	$testRootCreated = $true
@@ -82,8 +93,12 @@ try {
 	$buildRoot = Join-Path $testRoot 'build'
 	$buildBin = Join-Path $buildRoot 'bin'
 	$outputRoot = Join-Path $testRoot 'output'
+	$unsetOutputRoot = Join-Path $testRoot 'child-unset-output'
+	$staleOutputRoot = Join-Path $testRoot 'child-stale-output'
 	$missingBuildRoot = Join-Path $testRoot 'missing-build'
+	$missingOutputRoot = Join-Path $testRoot 'child-missing-output'
 	$existingOutputRoot = Join-Path $testRoot 'existing-output'
+	$wrapperScript = Join-Path $testRoot 'Invoke-ReleaseArchiveChild.ps1'
 	[System.IO.Directory]::CreateDirectory($buildBin) | Out-Null
 
 	$files = [ordered]@{
@@ -104,6 +119,59 @@ try {
 	}
 
 	$sourceCommit = '0123456789abcdef0123456789abcdef01234567'
+	$repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+	$wrapperContent = @'
+[CmdletBinding()]
+param(
+	[Parameter(Mandatory = $true)] [string]$RepositoryRoot,
+	[Parameter(Mandatory = $true)] [string]$BuildDirectory,
+	[Parameter(Mandatory = $true)] [string]$OutputDirectory,
+	[Parameter(Mandatory = $true)] [ValidateSet('netframework', 'net', 'net-win32', 'net-win64')] [string]$PackageName,
+	[Parameter(Mandatory = $true)] [ValidatePattern('^[0-9a-fA-F]{40}$')] [string]$SourceCommit,
+	[Parameter(Mandatory = $true)] [ValidateSet('Unset', 'Stale')] [string]$InitialExitState
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+Set-Location -LiteralPath $RepositoryRoot
+if ($InitialExitState -eq 'Unset') {
+	Remove-Variable LASTEXITCODE -Scope Local -Force -ErrorAction SilentlyContinue
+} else {
+	& pwsh -NoProfile -Command 'exit 37'
+	if ($LASTEXITCODE -ne 37) {
+		throw "Could not establish the stale caller exit state; got $LASTEXITCODE."
+	}
+}
+
+& pwsh -NoProfile -File .\Build\New-ReleaseArchive.ps1 `
+	-BuildDirectory $BuildDirectory `
+	-OutputDirectory $OutputDirectory `
+	-PackageName $PackageName `
+	-SourceCommit $SourceCommit
+if ($LASTEXITCODE -ne 0) {
+		throw "Release archive creation failed with exit code $LASTEXITCODE."
+}
+'@
+	[System.IO.File]::WriteAllText($wrapperScript, $wrapperContent, [System.Text.UTF8Encoding]::new($false))
+
+	function Invoke-ArchiveWrapper {
+		param(
+			[Parameter(Mandatory = $true)] [string]$BuildDirectory,
+			[Parameter(Mandatory = $true)] [string]$OutputDirectory,
+			[Parameter(Mandatory = $true)] [ValidateSet('Unset', 'Stale')] [string]$InitialExitState
+		)
+
+		$null = & pwsh -NoProfile -File $wrapperScript `
+			-RepositoryRoot $repositoryRoot `
+			-BuildDirectory $BuildDirectory `
+			-OutputDirectory $OutputDirectory `
+			-PackageName net-win64 `
+			-SourceCommit $sourceCommit `
+			-InitialExitState $InitialExitState 2>&1
+		return [int]$LASTEXITCODE
+	}
+
 	$beforeHashes = Get-FileHashMap -Root $buildRoot
 	$archiveScript = Join-Path $PSScriptRoot 'New-ReleaseArchive.ps1'
 	& $archiveScript -BuildDirectory $buildRoot -OutputDirectory $outputRoot -PackageName net-win64 -SourceCommit $sourceCommit
@@ -140,6 +208,18 @@ try {
 		Assert-Equal -Expected $beforeHashes[$relativePath] -Actual $afterHashes[$relativePath] -Message "Build input changed: $relativePath"
 	}
 
+	$unsetChildExitCode = Invoke-ArchiveWrapper -BuildDirectory $buildRoot -OutputDirectory $unsetOutputRoot -InitialExitState Unset
+	Assert-Equal -Expected 0 -Actual $unsetChildExitCode -Message 'Successful child packaging failed with an initially unset LASTEXITCODE.'
+	Assert-True -Condition (Test-Path -LiteralPath (Join-Path $unsetOutputRoot 'netSpy-net-win64.zip') -PathType Leaf) -Message 'Unset-state child packaging did not create an archive.'
+	Assert-True -Condition (Test-Path -LiteralPath (Join-Path $unsetOutputRoot 'netSpy-net-win64.zip.sha256') -PathType Leaf) -Message 'Unset-state child packaging did not create a checksum sidecar.'
+	Assert-True -Condition (Test-Path -LiteralPath (Join-Path $unsetOutputRoot 'netSpy-net-win64.zip.source.txt') -PathType Leaf) -Message 'Unset-state child packaging did not create a source sidecar.'
+
+	$staleChildExitCode = Invoke-ArchiveWrapper -BuildDirectory $buildRoot -OutputDirectory $staleOutputRoot -InitialExitState Stale
+	Assert-Equal -Expected 0 -Actual $staleChildExitCode -Message 'Successful child packaging failed with a stale nonzero LASTEXITCODE.'
+	Assert-True -Condition (Test-Path -LiteralPath (Join-Path $staleOutputRoot 'netSpy-net-win64.zip') -PathType Leaf) -Message 'Stale-state child packaging did not create an archive.'
+	Assert-True -Condition (Test-Path -LiteralPath (Join-Path $staleOutputRoot 'netSpy-net-win64.zip.sha256') -PathType Leaf) -Message 'Stale-state child packaging did not create a checksum sidecar.'
+	Assert-True -Condition (Test-Path -LiteralPath (Join-Path $staleOutputRoot 'netSpy-net-win64.zip.source.txt') -PathType Leaf) -Message 'Stale-state child packaging did not create a source sidecar.'
+
 	$overlappingOutputDirectories = @(
 		$buildRoot,
 		(Join-Path $buildRoot 'nested-output')
@@ -162,11 +242,14 @@ try {
 
 	Copy-Item -LiteralPath $buildRoot -Destination $missingBuildRoot -Recurse
 	Remove-Item -LiteralPath (Join-Path $missingBuildRoot 'bin/dnSpy.Bundles.dll') -Force
-	$missingOutputPath = Join-Path $testRoot 'missing-output'
 	Assert-ExpectedFailure -Action {
-		& $archiveScript -BuildDirectory $missingBuildRoot -OutputDirectory $missingOutputPath -PackageName net -SourceCommit $sourceCommit
+		& $archiveScript -BuildDirectory $missingBuildRoot -OutputDirectory $missingOutputRoot -PackageName net -SourceCommit $sourceCommit
 	} -Message 'Packaging did not reject a missing required file.'
-	Assert-True -Condition (-not (Test-Path -LiteralPath $missingOutputPath)) -Message 'Missing-file validation created output.'
+	Assert-True -Condition (-not (Test-Path -LiteralPath $missingOutputRoot)) -Message 'Missing-file validation created output.'
+
+	$missingChildExitCode = Invoke-ArchiveWrapper -BuildDirectory $missingBuildRoot -OutputDirectory $missingOutputRoot -InitialExitState Unset
+	Assert-True -Condition ($missingChildExitCode -ne 0) -Message 'Child packaging accepted a missing required file.'
+	Assert-True -Condition (-not (Test-Path -LiteralPath $missingOutputRoot)) -Message 'Missing-file child validation created output.'
 
 	[System.IO.Directory]::CreateDirectory($existingOutputRoot) | Out-Null
 	$existingArchivePath = Join-Path $existingOutputRoot 'netSpy-netframework.zip'
