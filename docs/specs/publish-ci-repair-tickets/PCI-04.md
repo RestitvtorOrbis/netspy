@@ -42,4 +42,15 @@ Real compressed header decompiles with exactly one selected read and no sibling 
 
 ## Delivery contract
 
-Status: planned. Implement without committing; obtain independent review before orchestration updates this ticket and the master ledger and creates the expected local commit. Preserve all pre-existing changes listed in the master spec. Record actual commands/results and limitations here. Do not push or publish.
+Status: approved. The five implementation paths were reviewed independently by a read-only gpt-5.6-sol reviewer and are ready for the expected local commit. Preserve all pre-existing changes listed in the master spec. Do not push or publish.
+
+## Delivery evidence
+
+- Changed paths: `.github/workflows/build.yml`, `Extensions/dnSpy.Bundles/BundleAssemblyResolver.cs`, `Extensions/dnSpy.Bundles/BundleDocumentNodeProvider.cs`, `Tests/dnSpy.Bundles.IntegrationTests/BundleAssemblyResolverTests.cs`, and `Tests/dnSpy.Bundles.IntegrationTests/BundleDecompilerAnalyzerTests.cs`.
+- `BundleAssemblyResolver` now owns an instance `AsyncLocal<int>` suppression scope with balanced nested and idempotent disposal. Owning-bundle loaded workspace resolution and ambiguity remain first; existing top-level lookup remains available; candidate activation, fallback, and suppressed failure caching are skipped while the scope is active. The managed-entry node explicitly activates the selected module and scopes only its existing header decompile. Focused tests cover nesting, exception restoration, loaded/top-level resolution, candidate/fallback suppression and failure-cache behavior, unrelated sources and other resolver instances, deterministic two-task isolation, and compressed lazy header/body/analyzer behavior.
+- The existing workflow integration filter retains all prior classes and appends `BundleAssemblyResolverTests` and `BundleTreeNodeTests`.
+- Independent Sol review: `APPROVED`, no findings. The protected pre-existing `build.ps1` mode change and the three named untracked tests were excluded and remain unstaged.
+- `dotnet build Tests/dnSpy.Bundles.IntegrationTests/dnSpy.Bundles.IntegrationTests.csproj -c Release -p:EnableWindowsTargeting=true` passed with 0 warnings and 0 errors.
+- `dotnet test Tests/dnSpy.Bundles.IntegrationTests/dnSpy.Bundles.IntegrationTests.csproj -c Release -f net10.0-windows --no-build --no-restore --filter 'FullyQualifiedName~BundleAssemblyResolverTests|FullyQualifiedName~BundleDecompilerAnalyzerTests|FullyQualifiedName~BundleManagedDocumentTests|FullyQualifiedName~BundleTreeNodeTests|FullyQualifiedName~BundleOpenPipelineTests|FullyQualifiedName~OrdinaryLoadingDecompilerRegressionTests'` reached VSTest but aborted before execution because Linux lacks `Microsoft.WindowsDesktop.App 10.0.0`; no Windows execution is claimed.
+- `pwsh -NoProfile -File Build/Test-ReleasePackaging.ps1` passed. `pwsh -NoProfile -File Build/Test-ReleasePublication.ps1` passed all 56 cases. `git diff --check` passed.
+- Expected commit: `fix(bundles): PCI-04 keep header resolution lazy`.

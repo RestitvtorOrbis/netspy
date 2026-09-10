@@ -44,6 +44,8 @@ namespace dnSpy.Bundles.IntegrationTests {
 			Assert.Empty(reads);
 
 			BundleEntryDocument app = entries.Single(a => a.Entry.RelativePath == "SingleFile.App.dll");
+			BundleEntryDocument dependency = entries.Single(a =>
+				a.Entry.RelativePath == "SingleFile.Dependency.dll");
 			var provider = new BundleDocumentNodeProvider();
 			DsDocumentNode appNode = provider.Create(null!, null, app)!;
 			IDecompiler decompiler = BundlePipelineTestSupport.CreateCSharpDecompiler();
@@ -58,6 +60,12 @@ namespace dnSpy.Bundles.IntegrationTests {
 				reads.ContainsKey(a.Entry.Index));
 
 			BundleModuleDocument appModule = app.CreateManagedDocument();
+			AssemblyRef dependencyReference = Assert.Single(appModule.ModuleDef!.GetAssemblyRefs(),
+				a => a.Name.String == "SingleFile.Dependency");
+			AssemblyDef? resolvedDependency = appModule.ModuleDef.Context!.AssemblyResolver.Resolve(
+				dependencyReference, appModule.ModuleDef);
+			Assert.NotNull(resolvedDependency);
+			Assert.Equal(1, reads[dependency.Entry.Index]);
 			TypeDef appType = BundlePipelineTestSupport.FindMethodBearingType(appModule.ModuleDef!, "Program");
 			Assert.Contains(appType.Methods, a => a.HasBody);
 			var bodyOutput = BundlePipelineTestSupport.DecompileType(decompiler, appType);
@@ -67,8 +75,6 @@ namespace dnSpy.Bundles.IntegrationTests {
 			Assert.DoesNotContain("The decompiler extension wasn't built", decompiledBody,
 				StringComparison.Ordinal);
 
-			BundleEntryDocument dependency = entries.Single(a =>
-				a.Entry.RelativePath == "SingleFile.Dependency.dll");
 			BundleModuleDocument dependencyModule = dependency.CreateManagedDocument();
 			Assert.NotNull(dependencyModule.ModuleDef);
 			Assert.Equal(1, reads[dependency.Entry.Index]);

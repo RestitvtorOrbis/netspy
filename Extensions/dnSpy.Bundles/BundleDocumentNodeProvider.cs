@@ -110,11 +110,13 @@ namespace dnSpy.Bundles.Extension {
 				return true;
 			}
 
-			if (module!.ModuleDef!.Assembly is AssemblyDef assembly)
-				context.Decompiler.Decompile(assembly, context.Output, context.DecompilationContext);
-			else
-				context.Decompiler.Decompile(module.ModuleDef, context.Output,
-					context.DecompilationContext);
+			using (module!.BundleDocument.AssemblyResolver.DisableAssemblyLoad()) {
+				if (module.ModuleDef!.Assembly is AssemblyDef assembly)
+					context.Decompiler.Decompile(assembly, context.Output, context.DecompilationContext);
+				else
+					context.Decompiler.Decompile(module.ModuleDef, context.Output,
+						context.DecompilationContext);
+			}
 			return true;
 		}
 

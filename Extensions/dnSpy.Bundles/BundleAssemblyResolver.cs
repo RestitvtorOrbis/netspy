@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using dnlib.DotNet;
 using dnSpy.Contracts.Documents;
 using dnSpy.Contracts.Documents.Bundles;
@@ -28,6 +29,7 @@ namespace dnSpy.Bundles.Extension {
 		readonly IDsDocumentService? documentService;
 		readonly IAssemblyResolver? fallbackResolver;
 		readonly BundleWorkspaceDocumentIndex index;
+		readonly AsyncLocal<int> disableAssemblyLoad = new AsyncLocal<int>();
 		readonly object diagnosticLock = new object();
 		string? lastDiagnostic;
 		int disposed;
@@ -59,6 +61,12 @@ namespace dnSpy.Bundles.Extension {
 		/// <summary>Gets the per-bundle registry used by this resolver.</summary>
 		internal BundleWorkspaceDocumentIndex WorkspaceIndex => index;
 
+		/// <summary>Disables activation of additional assemblies for this resolver flow.</summary>
+		internal IDisposable DisableAssemblyLoad() {
+			disableAssemblyLoad.Value = checked(disableAssemblyLoad.Value + 1);
+			return new DisableAssemblyLoadScope(this);
+		}
+
 		AssemblyDef? IAssemblyResolver.Resolve(IAssembly assembly, ModuleDef sourceModule) =>
 			Resolve(assembly, sourceModule);
 
@@ -83,6 +91,18 @@ namespace dnSpy.Bundles.Extension {
 				if (loadedAssembly is not null) {
 					SetDiagnostic(null);
 					return loadedAssembly;
+				}
+
+				if (disableAssemblyLoad.Value != 0) {
+					// FindAssembly only searches already-loaded top-level documents and the document
+					// service's temporary cache. Preserve that lookup, but do not activate a bundle
+					// candidate or invoke the ordinary resolver while the header is being decompiled.
+					AssemblyDef? loadedTopLevel = ResolveTopLevel(assembly, allowCurrentBundle: true);
+					if (loadedTopLevel is not null) {
+						SetDiagnostic(null);
+						return loadedTopLevel;
+					}
+					return null;
 				}
 
 				// Candidate activation is intentionally lazy. The per-entry guard is acquired by
@@ -292,6 +312,21 @@ namespace dnSpy.Bundles.Extension {
 		public void Dispose() {
 			if (System.Threading.Interlocked.Exchange(ref disposed, 1) == 0)
 				index.Dispose();
+		}
+
+		sealed class DisableAssemblyLoadScope : IDisposable {
+			BundleAssemblyResolver? resolver;
+
+			public DisableAssemblyLoadScope(BundleAssemblyResolver resolver) => this.resolver = resolver;
+
+			public void Dispose() {
+				BundleAssemblyResolver? resolver = Interlocked.Exchange(ref this.resolver, null);
+				if (resolver is null)
+					return;
+				int value = resolver.disableAssemblyLoad.Value;
+				if (value != 0)
+					resolver.disableAssemblyLoad.Value = value - 1;
+			}
 		}
 
 		readonly struct LoadedAssembly {

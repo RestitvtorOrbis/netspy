@@ -6,6 +6,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 using dnSpy.Bundles;
 using dnSpy.Bundles.Extension;
 using dnSpy.Contracts.Documents;
@@ -68,6 +70,187 @@ namespace dnSpy.Bundles.IntegrationTests {
 			Assert.Same(loaded.AssemblyDef, resolved);
 			Assert.Equal(1, duplicate.ReadCount(duplicate.DependencyIndex));
 			Assert.Equal(0, duplicate.ReadCount(duplicate.DuplicateDependencyIndex));
+		}
+
+		[Fact]
+		public void DisabledAssemblyLoadPreservesLoadedWorkspaceResolutionAndAmbiguity() {
+			using TestBundle source = TestBundle.FromPublishedFixture();
+			using TestBundle duplicate = source.WithDuplicateDependency();
+			var fallback = new ReturningAssemblyResolver(duplicate.DependencyAssembly);
+			using BundleDsDocument document = duplicate.CreateDocument(fallback: fallback);
+			BundleModuleDocument loaded = duplicate.LoadDependency(document,
+				"a/SingleFile.Dependency.dll");
+			BundleModuleDocument sourceModule = duplicate.LoadSource(document);
+			AssemblyRef reference = Assert.Single(sourceModule.ModuleDef!.GetAssemblyRefs(),
+				a => a.Name.String == "SingleFile.Dependency");
+
+			using (DisableAssemblyLoad(document.AssemblyResolver)) {
+				Assert.Same(loaded.AssemblyDef, Resolve(sourceModule, reference));
+				Assert.Equal(1, duplicate.ReadCount(duplicate.DependencyIndex));
+				Assert.Equal(0, duplicate.ReadCount(duplicate.DuplicateDependencyIndex));
+				Assert.Equal(0, fallback.Calls);
+			}
+
+			BundleModuleDocument duplicateLoaded = duplicate.LoadDependency(document,
+				"b/singlefile.dependency.dll");
+			Assert.NotNull(duplicateLoaded.AssemblyDef);
+			using (DisableAssemblyLoad(document.AssemblyResolver)) {
+				Assert.Null(Resolve(sourceModule, reference));
+				Assert.Contains("Ambiguous same-bundle assembly", document.AssemblyResolver.LastDiagnostic,
+					StringComparison.Ordinal);
+				Assert.Equal(0, fallback.Calls);
+			}
+		}
+
+		[Fact]
+		public void DisabledAssemblyLoadPreservesAlreadyLoadedTopLevelDocument() {
+			using TestBundle source = TestBundle.FromPublishedFixture();
+			using TestBundle bundle = source.WithoutDependency();
+			using var ordinary = DsDotNetDocument.CreateModule(
+				DsDocumentInfo.CreateDocument("ordinary-dependency.dll"),
+				ModuleDefMD.Load(bundle.DependencyBytes), loadSyms: false);
+			var service = DispatchProxy.Create<IDsDocumentService, DocumentServiceProxy>();
+			var proxy = (DocumentServiceProxy)(object)service;
+			proxy.FindResult = ordinary;
+			var fallback = new ReturningAssemblyResolver(bundle.DependencyAssembly);
+			using BundleDsDocument document = bundle.CreateDocument(
+				documentService: service, fallback: fallback);
+			BundleModuleDocument sourceModule = bundle.LoadSource(document);
+			IAssembly request = new AssemblyNameInfo(bundle.DependencyAssembly);
+
+			using (DisableAssemblyLoad(document.AssemblyResolver)) {
+				Assert.Same(ordinary.AssemblyDef, Resolve(sourceModule, request));
+			}
+
+			Assert.Equal(1, proxy.FindCalls);
+			Assert.Equal(0, fallback.Calls);
+			Assert.Equal(0, bundle.ReadCount(bundle.DependencyIndex));
+		}
+
+		[Fact]
+		public void DisabledAssemblyLoadDoesNotActivateCandidateFallbackOrFailureCache() {
+			using TestBundle bundle = TestBundle.FromPublishedFixture().WithInvalidDependency();
+			var fallback = new ReturningAssemblyResolver(bundle.DependencyAssembly);
+			using BundleDsDocument document = bundle.CreateDocument(fallback: fallback);
+			BundleModuleDocument sourceModule = bundle.LoadSource(document);
+			AssemblyRef reference = Assert.Single(sourceModule.ModuleDef!.GetAssemblyRefs(),
+				a => a.Name.String == "SingleFile.Dependency");
+
+			using (DisableAssemblyLoad(document.AssemblyResolver)) {
+				Assert.Null(Resolve(sourceModule, reference));
+				Assert.Equal(0, bundle.ReadCount(bundle.DependencyIndex));
+				Assert.Equal(0, fallback.Calls);
+				Assert.False(HasFailure(document.AssemblyResolver, bundle.DependencyIndex));
+			}
+
+			Assert.Same(bundle.DependencyAssembly, Resolve(sourceModule, reference));
+			Assert.Equal(1, bundle.ReadCount(bundle.DependencyIndex));
+			Assert.Equal(1, fallback.Calls);
+			Assert.True(HasFailure(document.AssemblyResolver, bundle.DependencyIndex));
+		}
+
+		[Fact]
+		public void DisabledAssemblyLoadScopesAreNestedIdempotentAndRestoreAfterException() {
+			using TestBundle source = TestBundle.FromPublishedFixture();
+			using TestBundle bundle = source.WithoutDependency();
+			var fallback = new ReturningAssemblyResolver(bundle.DependencyAssembly);
+			using BundleDsDocument document = bundle.CreateDocument(fallback: fallback);
+			BundleModuleDocument sourceModule = bundle.LoadSource(document);
+			IAssembly request = new AssemblyNameInfo(bundle.DependencyAssembly);
+
+			IDisposable outer = DisableAssemblyLoad(document.AssemblyResolver);
+			try {
+				Assert.Null(Resolve(sourceModule, request));
+				IDisposable inner = DisableAssemblyLoad(document.AssemblyResolver);
+				Assert.Null(Resolve(sourceModule, request));
+				inner.Dispose();
+				inner.Dispose();
+				Assert.Null(Resolve(sourceModule, request));
+
+				Action throwScopeException = () => {
+					using (DisableAssemblyLoad(document.AssemblyResolver)) {
+						Assert.Null(Resolve(sourceModule, request));
+						throw new InvalidOperationException("scope test");
+					}
+				};
+				Assert.Throws<InvalidOperationException>(throwScopeException);
+				Assert.Null(Resolve(sourceModule, request));
+			}
+			finally {
+				outer.Dispose();
+				outer.Dispose();
+			}
+
+			Assert.Same(bundle.DependencyAssembly, Resolve(sourceModule, request));
+			Assert.Equal(1, fallback.Calls);
+		}
+
+		[Fact]
+		public void DisabledAssemblyLoadLeavesUnrelatedSourceAndOtherResolverUnchanged() {
+			using TestBundle first = TestBundle.FromPublishedFixture();
+			var fallback = new ReturningAssemblyResolver(first.DependencyAssembly);
+			using BundleDsDocument firstDocument = first.CreateDocument(fallback: fallback);
+			using ModuleDefMD unrelatedSource = ModuleDefMD.Load(first.DependencyBytes);
+			IAssembly request = new AssemblyNameInfo(first.DependencyAssembly);
+
+			using TestBundle second = TestBundle.FromPublishedFixture();
+			using BundleDsDocument secondDocument = second.CreateDocument();
+			BundleModuleDocument secondSource = second.LoadSource(secondDocument);
+			AssemblyRef secondReference = Assert.Single(secondSource.ModuleDef!.GetAssemblyRefs(),
+				a => a.Name.String == "SingleFile.Dependency");
+
+			using (DisableAssemblyLoad(firstDocument.AssemblyResolver)) {
+				Assert.Same(first.DependencyAssembly,
+					firstDocument.AssemblyResolver.Resolve(request, unrelatedSource));
+				Assert.Equal(1, fallback.Calls);
+
+				AssemblyDef? resolved = Resolve(secondSource, secondReference);
+				Assert.NotNull(resolved);
+				Assert.Equal(1, second.ReadCount(second.DependencyIndex));
+			}
+		}
+
+		[Fact]
+		public async Task DisabledAssemblyLoadIsIsolatedAcrossIndependentTaskFlows() {
+			using TestBundle bundle = TestBundle.FromPublishedFixture();
+			using BundleDsDocument document = bundle.CreateDocument();
+			BundleModuleDocument source = bundle.LoadSource(document);
+			AssemblyRef reference = Assert.Single(source.ModuleDef!.GetAssemblyRefs(),
+				a => a.Name.String == "SingleFile.Dependency");
+			var scopeEntered = new TaskCompletionSource<bool>(
+				TaskCreationOptions.RunContinuationsAsynchronously);
+			var independentResolved = new TaskCompletionSource<AssemblyDef?>(
+				TaskCreationOptions.RunContinuationsAsynchronously);
+			AssemblyDef? suppressed = null;
+
+			// Start task B before task A creates its scope, so B captures the unsuppressed
+			// execution context and can resolve while A is still paused in its scope.
+			Task taskB = Task.Run(async () => {
+				await scopeEntered.Task;
+				try {
+					independentResolved.SetResult(Resolve(source, reference));
+				}
+				catch (Exception ex) {
+					independentResolved.SetException(ex);
+				}
+			}, TestContext.Current.CancellationToken);
+
+			Task taskA = Task.Run(async () => {
+				using (DisableAssemblyLoad(document.AssemblyResolver)) {
+					try {
+						suppressed = Resolve(source, reference);
+					}
+					finally {
+						scopeEntered.SetResult(true);
+					}
+					await independentResolved.Task;
+				}
+			}, TestContext.Current.CancellationToken);
+
+			await Task.WhenAll(taskA, taskB);
+			Assert.Null(suppressed);
+			Assert.NotNull(await independentResolved.Task);
+			Assert.Equal(1, bundle.ReadCount(bundle.DependencyIndex));
 		}
 
 		[Fact]
@@ -289,6 +472,22 @@ namespace dnSpy.Bundles.IntegrationTests {
 
 		static AssemblyDef? Resolve(BundleModuleDocument source, IAssembly request) {
 			return source.ModuleDef!.Context!.AssemblyResolver.Resolve(request, source.ModuleDef);
+		}
+
+		static IDisposable DisableAssemblyLoad(BundleAssemblyResolver resolver) {
+			MethodInfo method = typeof(BundleAssemblyResolver).GetMethod("DisableAssemblyLoad",
+				BindingFlags.Instance | BindingFlags.NonPublic)!;
+			return (IDisposable)method.Invoke(resolver, null)!;
+		}
+
+		static bool HasFailure(BundleAssemblyResolver resolver, int entryIndex) {
+			PropertyInfo property = typeof(BundleAssemblyResolver).GetProperty("WorkspaceIndex",
+				BindingFlags.Instance | BindingFlags.NonPublic)!;
+			object index = property.GetValue(resolver)!;
+			MethodInfo method = index.GetType().GetMethod("TryGetFailure",
+				BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!;
+			object?[] arguments = new object?[] { entryIndex, null };
+			return (bool)method.Invoke(index, arguments)!;
 		}
 
 		public class DocumentServiceProxy : DispatchProxy {
