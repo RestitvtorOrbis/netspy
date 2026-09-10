@@ -66,8 +66,15 @@ namespace dnSpy.Bundles.Tests {
 					entry.FileType == BundleFileType.Assembly);
 				Assert.Contains(bundle.Entries, entry => entry.FileType == BundleFileType.DepsJson);
 				Assert.Contains(bundle.Entries, entry => entry.FileType == BundleFileType.RuntimeConfigJson);
-				Assert.Equal(expected.IncludesSymbols,
-					bundle.Entries.Any(entry => entry.FileType == BundleFileType.Symbols));
+				if (expected.ManifestMajorVersion == 1) {
+					// Core 3.1 records PDBs as Extract, alongside native and other files.
+					Assert.Equal(expected.IncludesSymbols, bundle.Entries.Any(entry =>
+						entry.RelativePath == "SingleFile.App.pdb" && entry.RawFileType == 4 &&
+						entry.FileType == BundleFileType.Unknown));
+				}
+				else
+					Assert.Equal(expected.IncludesSymbols,
+						bundle.Entries.Any(entry => entry.FileType == BundleFileType.Symbols));
 				Assert.Equal(expected.Compressed, bundle.Entries.Any(entry => entry.IsCompressed));
 				ValidateExpectedInventory(fixture, bundle);
 			}

@@ -193,8 +193,10 @@ namespace dnSpy.Bundles.Extension {
 
 			var matches = new List<LoadedAssembly>();
 			foreach (BundleEntry entry in entries) {
-				if (index.TryGetFailure(entry.Index, out _))
+				if (index.TryGetFailure(entry.Index, out Exception? failure)) {
+					SetDiagnostic("Unable to load same-bundle assembly candidate '" + entry.RelativePath + "': " + failure!.Message);
 					continue;
+				}
 				try {
 					if (!index.TryGetLoaded(entry.Index, out BundleModuleDocument? document)) {
 						document = bundleDocument.CreateManagedDocument(entry);

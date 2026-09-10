@@ -104,7 +104,7 @@ namespace dnSpy.Bundles {
 
 				ValidateEntryRange(index, recordOffset, offset, size, compressedSize,
 					majorVersion, fileLength, options, ref totalLogicalSize);
-				BundleFileType fileType = ClassifyFileType(rawFileType);
+				BundleFileType fileType = ClassifyFileType(majorVersion, rawFileType);
 				entries.Add(new BundleEntry(index, offset, size, compressedSize,
 					rawFileType, fileType, relativePath));
 			}
@@ -120,7 +120,20 @@ namespace dnSpy.Bundles {
 				bundleId, flags, depsJson, runtimeConfigJson, entries, manifestEndOffset);
 		}
 
-		static BundleFileType ClassifyFileType(byte rawFileType) {
+		static BundleFileType ClassifyFileType(uint majorVersion, byte rawFileType) {
+			// Format reference: dotnet/core-setup v3.1.32, Microsoft.NET.HostModel/Bundle/FileType.cs
+			// Core 3.1 uses Assembly=0, Ready2Run=1, DepsJson=2,
+			// RuntimeConfigJson=3, Extract=4. Extract carries no content classification.
+			// Preserve the raw byte separately and never infer a type from the filename.
+			if (majorVersion == 1) {
+				switch (rawFileType) {
+				case 0:
+				case 1: return BundleFileType.Assembly;
+				case 2: return BundleFileType.DepsJson;
+				case 3: return BundleFileType.RuntimeConfigJson;
+				default: return BundleFileType.Unknown;
+				}
+			}
 			return rawFileType <= (byte)BundleFileType.Symbols
 				? (BundleFileType)rawFileType
 				: BundleFileType.Unknown;

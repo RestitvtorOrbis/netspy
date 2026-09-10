@@ -186,7 +186,16 @@ function Read-BundleString($State) {
     return $value
 }
 
-function Get-BundleFileType([byte] $RawType) {
+function Get-BundleFileType([uint32] $MajorVersion, [byte] $RawType) {
+    if ($MajorVersion -eq 1) {
+        switch ([int]$RawType) {
+            0 { return 'Assembly' }
+            1 { return 'Assembly' } # Reserved Ready2Run type in Core 3.1.
+            2 { return 'DepsJson' }
+            3 { return 'RuntimeConfigJson' }
+            default { return 'Unknown' } # Extract does not identify the content type.
+        }
+    }
     switch ([int]$RawType) {
         1 { return 'Assembly' }
         2 { return 'NativeBinary' }
@@ -262,7 +271,7 @@ function Get-GeneratedBundleInventory([string] $BundlePath) {
         $entries += [ordered]@{
             index = $entryIndex
             relativePath = $relativePath
-            fileType = Get-BundleFileType $rawType
+            fileType = Get-BundleFileType $major $rawType
             rawFileType = [int]$rawType
             offset = $offset
             size = $size

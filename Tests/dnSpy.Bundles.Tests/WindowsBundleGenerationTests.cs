@@ -33,7 +33,10 @@ namespace dnSpy.Bundles.Tests {
 				Assert.Equal(BundleManifestFlags.NetcoreApp3CompatMode, workspace.Bundle.Manifest.Flags);
 				Assert.All(workspace.Bundle.Entries, entry => {
 					Assert.Equal((byte)0, entry.RawFileType);
-					Assert.Equal(BundleFileType.Unknown, entry.FileType);
+					// Modern HostModel writes zero for every v1 entry. The original
+					// Core 3.1 enum defines zero as Assembly; the host extracts all
+					// content regardless, so this hint does not prove managed content.
+					Assert.Equal(BundleFileType.Assembly, entry.FileType);
 				});
 				Assert.Contains(workspace.Bundle.Entries, entry => entry.RelativePath == "native-component.dll");
 				Assert.Contains(workspace.Bundle.Entries, entry => entry.RelativePath == "Compat.App.pdb");
@@ -46,7 +49,10 @@ namespace dnSpy.Bundles.Tests {
 				Assert.Equal(BundleManifestFlags.NetcoreApp3CompatMode, output.Manifest.Flags);
 				Assert.All(output.Entries, entry => {
 					Assert.Equal((byte)0, entry.RawFileType);
-					Assert.Equal(BundleFileType.Unknown, entry.FileType);
+					// Modern HostModel writes zero for every v1 entry. The original
+					// Core 3.1 enum defines zero as Assembly; the host extracts all
+					// content regardless, so this hint does not prove managed content.
+					Assert.Equal(BundleFileType.Assembly, entry.FileType);
 				});
 				Assert.Equal(workspace.Bundle.Entries.Select(entry => entry.RelativePath).OrderBy(path => path),
 					output.Entries.Select(entry => entry.RelativePath).OrderBy(path => path));

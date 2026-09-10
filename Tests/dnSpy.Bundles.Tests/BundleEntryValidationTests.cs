@@ -12,7 +12,6 @@ using Xunit;
 namespace dnSpy.Bundles.Tests {
 	public sealed class BundleEntryValidationTests {
 		[Theory]
-		[InlineData(1u)]
 		[InlineData(2u)]
 		[InlineData(6u)]
 		public void AllOfficialTypesAndUnknownTypeAreRetained(uint version) {
@@ -34,6 +33,25 @@ namespace dnSpy.Bundles.Tests {
 						result.Bundle.Entries[i].FileType);
 				}
 			}
+		}
+
+		[Theory]
+		[InlineData(0, BundleFileType.Assembly)]
+		[InlineData(1, BundleFileType.Assembly)]
+		[InlineData(2, BundleFileType.DepsJson)]
+		[InlineData(3, BundleFileType.RuntimeConfigJson)]
+		[InlineData(4, BundleFileType.Unknown)]
+		[InlineData(5, BundleFileType.Unknown)]
+		[InlineData(254, BundleFileType.Unknown)]
+		public void Core31TypesAreNormalizedWithoutChangingRawByte(byte rawType, BundleFileType expected) {
+			using var fixture = SyntheticBundle.Create(1, new[] {
+				new SyntheticBundleEntry(expected, rawType, "entry.pdb", new byte[] { 1 }),
+			});
+			BundleOpenResult result = fixture.Open();
+			Assert.Equal(BundleOpenStatus.Success, result.Status);
+			BundleEntry entry = Assert.Single(result.Bundle!.Entries);
+			Assert.Equal(rawType, entry.RawFileType);
+			Assert.Equal(expected, entry.FileType);
 		}
 
 		[Fact]

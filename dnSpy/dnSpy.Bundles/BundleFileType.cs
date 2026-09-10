@@ -4,7 +4,7 @@
 
 namespace dnSpy.Bundles {
 	/// <summary>
-	/// Identifies the official bundle manifest type of an entry.
+	/// Identifies the normalized type of an entry across official manifest versions.
 	/// </summary>
 	public enum BundleFileType : byte {
 		/// <summary>Unknown or not-yet-classified entry.</summary>

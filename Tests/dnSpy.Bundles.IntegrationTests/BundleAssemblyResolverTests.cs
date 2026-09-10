@@ -452,9 +452,11 @@ namespace dnSpy.Bundles.IntegrationTests {
 
 			Assert.Null(source.ModuleDef.Context!.AssemblyResolver.Resolve(reference, source.ModuleDef));
 			int readsAfterFirstAttempt = bundle.ReadCount(bundle.DependencyIndex);
+			string? firstDiagnostic = document.AssemblyResolver.LastDiagnostic;
+			Assert.NotNull(firstDiagnostic);
 			Assert.Null(source.ModuleDef.Context.AssemblyResolver.Resolve(reference, source.ModuleDef));
 			Assert.Equal(readsAfterFirstAttempt, bundle.ReadCount(bundle.DependencyIndex));
-			Assert.NotNull(document.AssemblyResolver.LastDiagnostic);
+			Assert.Equal(firstDiagnostic, document.AssemblyResolver.LastDiagnostic);
 
 			document.Dispose();
 			Assert.Null(document.AssemblyResolver.Resolve(reference, source.ModuleDef));
