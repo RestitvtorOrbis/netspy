@@ -65,6 +65,7 @@ setlocal EnableExtensions EnableDelayedExpansion
 >>"%SINGLE_FILE_FIXTURE_CONTRACT_LOG%" echo BEGIN
 :nextArgument
 if "%~1"=="" goto done
+if /I "%~1"=="--nologo" exit /b 2
 >>"%SINGLE_FILE_FIXTURE_CONTRACT_LOG%" echo ARG:%~1
 shift
 goto nextArgument
@@ -81,6 +82,9 @@ exit /b 0
 log_path="$SINGLE_FILE_FIXTURE_CONTRACT_LOG"
 printf '%s\n' BEGIN >> "$log_path"
 for argument in "$@"; do
+    if [ "$argument" = "--nologo" ]; then
+        exit 2
+    fi
     printf 'ARG:%s\n' "$argument" >> "$log_path"
 done
 printf '%s\n' END >> "$log_path"
@@ -155,16 +159,16 @@ exit 0
     Assert-Contract ($invocations.Count -eq 3) "Expected three phase invocations, found $($invocations.Count)."
 
     $expectedRestore = @(
-        'restore', $projectPath, '--nologo', '--runtime', $runtimeIdentifier,
+        'restore', $projectPath, '--runtime', $runtimeIdentifier,
         '-p:SelfContained=true'
     ) + $properties
     $expectedBuild = @(
-        'build', $projectPath, '--nologo', '--configuration', 'Release',
+        'build', $projectPath, '--configuration', 'Release',
         '--runtime', $runtimeIdentifier,
         '--no-restore', '-p:SelfContained=true'
     ) + $properties
     $expectedPublish = @(
-        'publish', $projectPath, '--nologo', '--configuration', 'Release',
+        'publish', $projectPath, '--configuration', 'Release',
         '--runtime', $runtimeIdentifier,
         '--output', $publishRoot, '--no-build', '--no-restore',
         '-p:SelfContained=true'
@@ -177,6 +181,39 @@ exit 0
             Assert-Contract ($argument -notmatch '^(?:-p:TargetFramework(?:s)?(?:=|$)|--framework$|-f$)') "Framework selector '$argument' was forwarded to dotnet."
         }
     }
+
+    $syntheticRoot = Join-Path $testRoot 'synthetic-output'
+    $exactMainPath = Join-Path $syntheticRoot 'build/App/Release/net10.0/win-x64/SingleFile.App.dll'
+    $exactDependencyPath = Join-Path $syntheticRoot 'build/SingleFile.Dependency/Release/netstandard2.0/SingleFile.Dependency.dll'
+    $exactBundlePath = Join-Path $syntheticRoot 'publish/SingleFile.App.exe'
+    $decoyPaths = @(
+        (Join-Path $syntheticRoot 'build/App/Release/net10.0/ref/SingleFile.App.dll'),
+        (Join-Path $syntheticRoot 'build/App/Release/net10.0/refint/SingleFile.App.dll'),
+        (Join-Path $syntheticRoot 'build/copied/SingleFile.App.dll')
+    )
+    foreach ($fixturePath in @($exactMainPath, $exactDependencyPath, $exactBundlePath) + $decoyPaths) {
+        [IO.Directory]::CreateDirectory((Split-Path -Parent $fixturePath)) | Out-Null
+        [IO.File]::WriteAllText($fixturePath, 'synthetic fixture')
+    }
+
+    $resolvedMainPath = Get-RequiredFixtureFile $exactMainPath 'built main assembly'
+    Assert-Contract ([StringComparer]::OrdinalIgnoreCase.Equals($resolvedMainPath, [IO.Path]::GetFullPath($exactMainPath))) "The exact main assembly path resolved incorrectly: $resolvedMainPath"
+    $resolvedDependencyPath = Get-RequiredFixtureFile $exactDependencyPath 'built dependency assembly'
+    Assert-Contract ([StringComparer]::OrdinalIgnoreCase.Equals($resolvedDependencyPath, [IO.Path]::GetFullPath($exactDependencyPath))) "The exact dependency assembly path resolved incorrectly: $resolvedDependencyPath"
+    $resolvedBundlePath = Get-RequiredFixtureFile $exactBundlePath 'published bundle'
+    Assert-Contract ([StringComparer]::OrdinalIgnoreCase.Equals($resolvedBundlePath, [IO.Path]::GetFullPath($exactBundlePath))) "The exact bundle path resolved incorrectly: $resolvedBundlePath"
+
+    Remove-Item -LiteralPath $exactMainPath
+    $missingExactLeafError = $null
+    try {
+        Get-RequiredFixtureFile $exactMainPath 'built main assembly' | Out-Null
+    }
+    catch {
+        $missingExactLeafError = $_.Exception.Message
+    }
+    Assert-Contract ($null -ne $missingExactLeafError) 'A missing exact fixture leaf did not fail.'
+    Assert-Contract ($missingExactLeafError.Contains('built main assembly')) "The missing exact fixture error omitted the description: $missingExactLeafError"
+    Assert-Contract ($missingExactLeafError.Contains($exactMainPath)) "The missing exact fixture error omitted the path: $missingExactLeafError"
 
     $dotSourcePattern = '(?m)^\s*\.\s+\(Join-Path\s+\$PSScriptRoot\s+[\x27\"]FixtureGeneration\.Common\.ps1[\x27\"]\)'
     foreach ($generatorPath in @($historicalPath, $modernPath)) {

@@ -94,18 +94,6 @@ function Get-RelativePath([string] $Root, [string] $Path) {
     return [IO.Path]::GetRelativePath($Root, $Path).Replace('\', '/')
 }
 
-function Get-RequiredSingleFile([string] $Root, [string] $Pattern, [string] $Description) {
-    if (-not (Test-Path -LiteralPath $Root -PathType Container)) {
-        throw "Required $Description directory is missing: $Root"
-    }
-    $matches = @(Get-ChildItem -LiteralPath $Root -Recurse -File -Filter $Pattern |
-        Sort-Object -Property FullName)
-    if ($matches.Count -ne 1) {
-        throw "Expected exactly one $Description ('$Pattern') below '$Root'; found $($matches.Count)."
-    }
-    return $matches[0].FullName
-}
-
 function Get-PublishedFileRecords([string] $VariantRoot, [string] $PublishRoot) {
     $files = @(Get-ChildItem -LiteralPath $PublishRoot -Recurse -File |
         Sort-Object -Property FullName)
@@ -353,10 +341,11 @@ foreach ($generationName in $selectedNames) {
                 -PublishRoot $publishRoot `
                 -MSBuildProperties $properties
 
-            $bundlePath = Get-RequiredSingleFile $publishRoot '*.exe' 'published bundle'
-            $buildRoot = Join-Path $variantRoot 'build'
-            $buildMain = Get-RequiredSingleFile $buildRoot 'SingleFile.App.dll' 'built main assembly'
-            $buildDependency = Get-RequiredSingleFile (Join-Path $buildRoot 'SingleFile.Dependency') 'SingleFile.Dependency.dll' 'built dependency assembly'
+            $bundlePath = Get-RequiredFixtureFile (Join-Path $publishRoot 'SingleFile.App.exe') 'published bundle'
+            $buildMainPath = Join-Path $variantRoot "build/App/Release/$($generationInfo.TargetFramework)/win-x64/SingleFile.App.dll"
+            $buildMain = Get-RequiredFixtureFile $buildMainPath 'built main assembly'
+            $buildDependencyPath = Join-Path $variantRoot 'build/SingleFile.Dependency/Release/netstandard2.0/SingleFile.Dependency.dll'
+            $buildDependency = Get-RequiredFixtureFile $buildDependencyPath 'built dependency assembly'
             $publishedFiles = @(Get-PublishedFileRecords $variantRoot $publishRoot)
             $bundleInventory = Get-GeneratedBundleInventory $bundlePath
             if ($bundleInventory.majorVersion -ne $generationInfo.ManifestMajorVersion) {

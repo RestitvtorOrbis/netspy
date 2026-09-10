@@ -2,6 +2,16 @@
 # Keep the phase arguments here so every SDK generation exercises the same
 # restore graph and publish properties.
 
+function Get-RequiredFixtureFile([string] $Path, [string] $Description) {
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        throw "Required $Description file path is empty."
+    }
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Required $Description file is missing: $Path"
+    }
+    return [IO.Path]::GetFullPath($Path)
+}
+
 function Invoke-SingleFileFixturePhases {
     [CmdletBinding()]
     param(
@@ -64,16 +74,16 @@ function Invoke-SingleFileFixturePhases {
 
     $selfContainedValue = $SelfContained.ToString().ToLowerInvariant()
     $restoreArguments = @(
-        'restore', $ProjectPath, '--nologo', '--runtime', $RuntimeIdentifier,
+        'restore', $ProjectPath, '--runtime', $RuntimeIdentifier,
         "-p:SelfContained=$selfContainedValue"
     ) + $properties
     $buildArguments = @(
-        'build', $ProjectPath, '--nologo', '--configuration', 'Release',
+        'build', $ProjectPath, '--configuration', 'Release',
         '--runtime', $RuntimeIdentifier,
         '--no-restore', "-p:SelfContained=$selfContainedValue"
     ) + $properties
     $publishArguments = @(
-        'publish', $ProjectPath, '--nologo', '--configuration', 'Release',
+        'publish', $ProjectPath, '--configuration', 'Release',
         '--runtime', $RuntimeIdentifier,
         '--output', $PublishRoot, '--no-build', '--no-restore',
         "-p:SelfContained=$selfContainedValue"

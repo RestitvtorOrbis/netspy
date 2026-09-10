@@ -173,6 +173,13 @@ jobs:
           Write-Host "Selected RID: $rid"
           Write-Host "Self-contained variants: $selfContained"
 
+      - name: Test fixture generation contract
+        run: |
+          pwsh -NoProfile -File .\Tests\TestAssets\SingleFile\Test-FixtureGenerationCommon.ps1
+          if ($LASTEXITCODE -ne 0) {
+            throw "Fixture generation contract failed with exit code $LASTEXITCODE."
+          }
+
       - name: Generate required artifacts with pinned SDK
         run: |
           # The generator enters the generation directory before checking dotnet --version,

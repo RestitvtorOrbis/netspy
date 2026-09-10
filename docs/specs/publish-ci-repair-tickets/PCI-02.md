@@ -41,4 +41,16 @@ No phase receives unsupported cosmetic flag; implementation leaf always selected
 
 ## Delivery contract
 
-Status: planned. Implement without committing; obtain independent review before orchestration updates this ticket and the master ledger and creates the expected local commit. Preserve all pre-existing changes listed in the master spec. Record actual commands/results and limitations here. Do not push or publish.
+Status: approved. Preserve all pre-existing changes listed in the master spec. Do not push or publish.
+
+## Delivery evidence
+
+- Changed paths: `.github/workflows/build.yml`, `Tests/TestAssets/SingleFile/FixtureGeneration.Common.ps1`, `Tests/TestAssets/SingleFile/Test-FixtureGenerationCommon.ps1`, `Tests/TestAssets/SingleFile/Generate-HistoricalFixtures.ps1`.
+- Independent Sol review: `APPROVED` with no findings.
+- `pwsh -NoProfile -File Tests/TestAssets/SingleFile/Test-FixtureGenerationCommon.ps1`: passed independently and by the implementer; the Sol sandbox could not rerun it because `/tmp` was read-only.
+- `pwsh -NoProfile -File Tests/TestAssets/SingleFile/Generate-ModernFixtures.ps1`: passed with SDK `10.0.111`.
+- `pwsh -NoProfile -File Tests/TestAssets/SingleFile/Generate-HistoricalFixtures.ps1 -Generation Net10`: passed all five Net10 variants; exact build/publish paths and sidecars were verified.
+- `dotnet test Tests/dnSpy.Bundles.Tests/dnSpy.Bundles.Tests.csproj -c Release -f net10.0 -m:1 --filter FullyQualifiedName~ModernPublishedBundleTests`: compiled the test assemblies, but VSTest could not start because the Linux sandbox denied its TCP listener (`SocketException: Permission denied`).
+- `git diff --check`: passed.
+- Only SDK `10.0.111` is installed; historical SDKs `3.1.426`, `5.0.408`, `6.0.428`, and `8.0.419`, plus Windows execution, are unavailable.
+- Expected local commit: `fix(fixtures): PCI-02 support historical SDK output contracts`.
