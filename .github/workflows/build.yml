@@ -56,7 +56,7 @@ jobs:
         with:
           submodules: true
 
-      - uses: actions/setup-dotnet@v6.0.0
+      - uses: actions/setup-dotnet@v6.1.0
         with:
           dotnet-version: 10.0.x
           dotnet-quality: ga
@@ -150,7 +150,7 @@ jobs:
           submodules: false
 
       - name: Install pinned .NET SDK (${{ matrix.sdk }})
-        uses: actions/setup-dotnet@v6.0.0
+        uses: actions/setup-dotnet@v6.1.0
         with:
           dotnet-version: ${{ matrix.sdk }}
 
@@ -223,7 +223,7 @@ jobs:
         with:
           submodules: false
 
-      - uses: actions/setup-dotnet@v6.0.0
+      - uses: actions/setup-dotnet@v6.1.0
         with:
           dotnet-version: 10.0.111
           dotnet-quality: ga
@@ -282,7 +282,7 @@ jobs:
         with:
           submodules: recursive
 
-      - uses: actions/setup-dotnet@v6.0.0
+      - uses: actions/setup-dotnet@v6.1.0
         with:
           dotnet-version: 10.0.111
           dotnet-quality: ga
